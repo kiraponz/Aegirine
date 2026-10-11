@@ -1,0 +1,5 @@
+[submodule "external/armsx2"]
+	path = external/armsx2
+	url = https://github.com/ARMSX2/ARMSX2.git
+	shallow = true
+	ignore = dirty
