@@ -25,3 +25,8 @@ keystore.properties
 *.chd
 *.cso
 *.zso
+
+# Local AI agent instructions and working docs
+/AGENTS.md
+/CLAUDE.md
+/docs/
