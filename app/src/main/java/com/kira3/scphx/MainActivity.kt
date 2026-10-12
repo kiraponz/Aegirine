@@ -9,6 +9,12 @@ import com.kira3.scphx.ui.theme.ScphxTheme
 
 /** Library, settings and BIOS setup. Gameplay runs in its own activity. */
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        // Settings changed from the game's menu were written by another process.
+        (application as ScphxApplication).container.settingsRepository.reload()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

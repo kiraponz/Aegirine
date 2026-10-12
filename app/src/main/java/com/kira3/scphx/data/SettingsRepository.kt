@@ -35,6 +35,11 @@ class SettingsRepository(context: Context) {
     /** Bumped after every write made through this repository. */
     val changes: Flow<Int> = _changes
 
+    /** Tells readers to read again, for changes another process made (the game's :emu process). */
+    fun reload() {
+        _changes.value++
+    }
+
     val global: Flow<EmulatorSettings> = _changes.map { loadGlobal() }
 
     fun game(serial: String): Flow<GameSettings> = _changes.map { loadGame(serial) }

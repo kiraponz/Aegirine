@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -131,8 +132,11 @@ class EmulationActivity : ComponentActivity() {
     /** The custom driver the current boot uses, or null for the system driver. */
     private var customDriverInUse: GpuDriver? = null
 
-    /** Set once a boot failed with a custom driver; later boots in this activity use the system driver. */
+    /** Boots in this activity use the system driver: a boot failed with a custom one, see [onVmStopped]. */
     private var systemDriverForced = false
+
+    /** How long the :emu process stays alive after the game ends, so a Toast can be seen. */
+    private var exitDelayMs = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -146,6 +150,10 @@ class EmulationActivity : ComponentActivity() {
         enterImmersiveMode()
 
         serial = intent.getStringExtra(EXTRA_SERIAL)
+        systemDriverForced = intent.getBooleanExtra(EXTRA_SYSTEM_DRIVER, false)
+        intent.getStringExtra(EXTRA_FAILED_DRIVER)?.let { name ->
+            Toast.makeText(this, getString(R.string.emulation_driver_failed, name), Toast.LENGTH_LONG).show()
+        }
         onBackPressedDispatcher.addCallback(this) {
             when {
                 menuOpen -> if (!stateBusy) closeMenu()
@@ -261,16 +269,11 @@ class EmulationActivity : ComponentActivity() {
         val failedDriver = customDriverInUse
         when {
             // The custom driver loaded but the game still could not start (e.g. the GPU could
-            // not create a Vulkan device with it): once, try again with the system driver.
+            // not create a Vulkan device with it). Its library stays loaded in this process,
+            // so try again in a new one with the system driver.
             error != null && failedDriver != null && !systemDriverForced -> {
                 Log.w(TAG, "Boot failed with driver ${failedDriver.id} ($error); retrying with the system driver")
-                systemDriverForced = true
-                Toast.makeText(
-                    applicationContext,
-                    getString(R.string.emulation_driver_failed, failedDriver.name),
-                    Toast.LENGTH_LONG,
-                ).show()
-                lifecycleScope.launch { startVm(gameUri) }
+                relaunch(gameUri, failedDriver.name)
             }
             error != null -> {
                 Log.e(TAG, "Boot failed: $error")
@@ -600,6 +603,7 @@ class EmulationActivity : ComponentActivity() {
         // configChanges keeps rotation from recreating this activity, so being destroyed
         // means the game is over.
         if (emulationThread != null && core.hasActiveVm) core.shutdown()
+        if (isFinishing) exitProcess()
     }
 
     /** Stops the VM; the emulation thread finishes the activity once it has shut down. */
@@ -615,7 +619,30 @@ class EmulationActivity : ComponentActivity() {
     private fun finishWithMessage(message: String) {
         // Application context: this can run after the activity is already destroyed.
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+        exitDelayMs = TOAST_VISIBLE_MS
         finish()
+    }
+
+    /** Starts the game again with the system driver in a fresh process, and ends this one. */
+    private fun relaunch(gameUri: Uri, failedDriverName: String) {
+        val target = intent(this, gameUri, serial)
+            .putExtra(EXTRA_SYSTEM_DRIVER, true)
+            .putExtra(EXTRA_FAILED_DRIVER, failedDriverName)
+        startActivity(RelaunchActivity.intent(this, target))
+        finish()
+    }
+
+    /**
+     * Ends the :emu process once the VM thread is done. Anything a driver or the core loaded
+     * stays in a process until it dies, so a game never shares one with the next.
+     */
+    private fun exitProcess() {
+        val vmThread = emulationThread
+        thread(name = "ProcessExit") {
+            vmThread?.join(VM_STOP_WAIT_MS)
+            if (exitDelayMs > 0) Thread.sleep(exitDelayMs)
+            Process.killProcess(Process.myPid())
+        }
     }
 
     private fun enterImmersiveMode() {
@@ -657,6 +684,10 @@ class EmulationActivity : ComponentActivity() {
         private const val AUTO_PROGRESSIVE_VM_WAIT_MS = 15_000L
         private const val EXTRA_GAME_URI = "com.kira3.scphx.extra.GAME_URI"
         private const val EXTRA_SERIAL = "com.kira3.scphx.extra.SERIAL"
+        private const val EXTRA_SYSTEM_DRIVER = "com.kira3.scphx.extra.SYSTEM_DRIVER"
+        private const val EXTRA_FAILED_DRIVER = "com.kira3.scphx.extra.FAILED_DRIVER"
+        private const val VM_STOP_WAIT_MS = 5_000L
+        private const val TOAST_VISIBLE_MS = 3_500L
 
         fun intent(context: Context, gameUri: Uri, serial: String?): Intent =
             Intent(context, EmulationActivity::class.java)
