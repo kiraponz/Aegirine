@@ -389,6 +389,7 @@ object SettingsCatalog {
             listOf(
                 Toggle("emuCore.enableFastBoot", R.string.settings_fast_boot, R.string.settings_fast_boot_summary),
                 Toggle("output.autoProgressiveScan", R.string.settings_auto_progressive, R.string.settings_auto_progressive_summary),
+                BiosManageSetting,
                 GameBiosSetting,
             ),
         ),

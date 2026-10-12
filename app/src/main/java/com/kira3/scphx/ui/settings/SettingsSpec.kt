@@ -60,6 +60,8 @@ sealed class Setting(
     val enabledWhen: ((SettingsValues) -> Boolean)?,
     /** Shown only in a game's settings. */
     val gameOnly: Boolean = false,
+    /** Shown only in the global settings. */
+    val globalOnly: Boolean = false,
 ) {
     val appliesOnNextBoot: Boolean get() = path in SettingsEffects.appliesOnNextBoot
 }
@@ -124,4 +126,9 @@ data object GameBiosSetting : Setting(
 data object GpuDriverSetting : Setting(
     "output.customDriverId", R.string.settings_gpu_driver, R.string.settings_gpu_driver_summary, null,
     enabledWhen = { it.string("output.renderer") in setOf("auto", "vulkan") },
+)
+
+/** The BIOS files the app holds, managed on their own screen. */
+data object BiosManageSetting : Setting(
+    null, R.string.settings_bios_manage, R.string.settings_bios_manage_summary, null, null, globalOnly = true,
 )

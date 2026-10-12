@@ -140,13 +140,6 @@ private fun LibraryContent(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bios_title)) },
-                            onClick = {
-                                menuOpen = false
-                                onOpenBios()
-                            },
-                        )
-                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.library_change_game_folder)) },
                             onClick = {
                                 menuOpen = false

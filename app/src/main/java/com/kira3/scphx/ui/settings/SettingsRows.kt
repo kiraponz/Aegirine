@@ -64,6 +64,7 @@ interface SettingsActions {
     fun applyPreset(preset: PerformancePreset)
     fun reset(path: String)
     fun openGpuDriver()
+    fun openBios()
 }
 
 /** One setting as a segmented list item. [shapes] places it within its section's group. */
@@ -94,6 +95,7 @@ fun SettingRow(
         PresetSetting -> PresetRow(row, actions)
         GameBiosSetting -> DialogChoiceRow(row, biosChoice(state), actions)
         GpuDriverSetting -> GpuDriverRow(row, state, actions)
+        BiosManageSetting -> BiosManageRow(row, actions)
     }
 }
 
@@ -115,6 +117,18 @@ private fun biosChoice(state: SettingsUiState): Choice = Choice(
         state.bioses.map { Option(it.fileName, Label.text("${it.metadata.description} (${it.fileName})")) },
     gameOnly = true,
 )
+
+@Composable
+private fun BiosManageRow(row: RowParams, actions: SettingsActions) {
+    SegmentedListItem(
+        onClick = actions::openBios,
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+        supportingContent = { Supporting(BiosManageSetting) },
+    ) { Text(stringResource(BiosManageSetting.title)) }
+}
 
 @Composable
 private fun GpuDriverRow(row: RowParams, state: SettingsUiState, actions: SettingsActions) {

@@ -365,6 +365,8 @@
     <string name="settings_rewind_keep">Points to keep</string>
     <string name="settings_fast_boot">Fast boot</string>
     <string name="settings_fast_boot_summary">Skips the BIOS intro</string>
+    <string name="settings_bios_manage">BIOS files</string>
+    <string name="settings_bios_manage_summary">Choose the BIOS games boot with, add or remove files</string>
     <string name="settings_game_bios">BIOS</string>
     <string name="settings_game_bios_summary">The BIOS this game boots with</string>
     <string name="settings_bios_default">Same as the selected BIOS</string>

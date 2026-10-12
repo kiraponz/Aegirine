@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data object LibraryRoute : NavKey
 
-/** The BIOS files the app holds. */
+/** The BIOS files the app holds, a page of the global settings. */
 @Serializable
 data object BiosRoute : NavKey
 

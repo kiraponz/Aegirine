@@ -29,6 +29,8 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.navigation3.LocalListDetailSceneScope
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -57,7 +59,7 @@ import com.kira3.scphx.ui.settings.settingsTopBarColors
  * The BIOS files the app holds: pick the one games boot with, add files, delete them.
  * (A game can pick its own BIOS in its settings.)
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun BiosScreen(
     onBack: () -> Unit,
@@ -66,6 +68,8 @@ fun BiosScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<Bios?>(null) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    // Beside the settings list there is nothing to go back to.
+    val twoPane = LocalListDetailSceneScope.current != null
     val snackbarHostState = remember { SnackbarHostState() }
 
     val pickBios = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -86,7 +90,7 @@ fun BiosScreen(
         topBar = {
             LargeFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.bios_title)) },
-                navigationIcon = { BackButton(onBack) },
+                navigationIcon = { if (!twoPane) BackButton(onBack) },
                 colors = settingsTopBarColors(),
                 scrollBehavior = scrollBehavior,
             )

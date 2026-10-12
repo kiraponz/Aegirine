@@ -34,7 +34,7 @@ fun ScphxApp() {
     // Beside the settings list, opening something replaces what is open in the detail pane.
     fun openDetail(route: NavKey) {
         val last = backStack.lastOrNull()
-        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute) {
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute) {
             while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
         }
         backStack.add(route)
@@ -55,11 +55,17 @@ fun ScphxApp() {
             entry<LibraryRoute> {
                 LibraryScreen(
                     onOpenSettings = { backStack.add(SettingsRoute()) },
-                    onOpenBios = { backStack.add(BiosRoute) },
+                    // The BIOS files are managed from the settings.
+                    onOpenBios = {
+                        backStack.add(SettingsRoute())
+                        backStack.add(BiosRoute)
+                    },
                     onOpenGameSettings = { serial, title -> backStack.add(SettingsRoute(serial, title)) },
                 )
             }
-            entry<BiosRoute> {
+            entry<BiosRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
                 BiosScreen(onBack = { backStack.removeLastOrNull() })
             }
             entry<SettingsRoute>(
@@ -88,6 +94,7 @@ fun ScphxApp() {
                     serial = route.serial,
                     gameTitle = route.gameTitle,
                     onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
+                    onOpenBios = { openDetail(BiosRoute) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }
@@ -100,6 +107,7 @@ fun ScphxApp() {
                     serial = route.serial,
                     gameTitle = route.gameTitle,
                     onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
+                    onOpenBios = { openDetail(BiosRoute) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }
