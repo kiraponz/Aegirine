@@ -9,6 +9,7 @@
     <string name="library_empty">No games found in this folder</string>
     <string name="library_no_folder">Select the folder that holds your games</string>
     <string name="library_select_game_folder">Select game folder</string>
+    <string name="library_boot_bios">Boot BIOS</string>
     <string name="library_change_game_folder">Change game folder</string>
     <string name="library_more">More options</string>
     <string name="library_bios_missing">No BIOS selected</string>

@@ -92,6 +92,7 @@ fun LibraryScreen(
         onOpenBios = onOpenBios,
         onPickGameFolder = { pickGameFolder.launch(null) },
         onRefresh = viewModel::refresh,
+        onBootBios = viewModel::onBootBiosClicked,
         onGameClick = viewModel::onGameClicked,
         onGameSettingsClick = viewModel::onGameSettingsClicked,
     )
@@ -114,6 +115,7 @@ private fun LibraryContent(
     onOpenBios: () -> Unit,
     onPickGameFolder: () -> Unit,
     onRefresh: () -> Unit,
+    onBootBios: () -> Unit,
     onGameClick: (Game) -> Unit,
     onGameSettingsClick: (Game) -> Unit,
 ) {
@@ -130,6 +132,13 @@ private fun LibraryContent(
                         Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.library_more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_boot_bios)) },
+                            onClick = {
+                                menuOpen = false
+                                onBootBios()
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.bios_title)) },
                             onClick = {
@@ -247,6 +256,7 @@ private fun LibraryContentPreview() {
             onOpenBios = {},
             onPickGameFolder = {},
             onRefresh = {},
+            onBootBios = {},
             onGameClick = {},
             onGameSettingsClick = {},
         )

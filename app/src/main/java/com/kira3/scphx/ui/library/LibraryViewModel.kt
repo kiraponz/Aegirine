@@ -93,6 +93,16 @@ class LibraryViewModel(
         }
     }
 
+    /** Starts the BIOS itself, with no disc: the PS2 system menu. */
+    fun onBootBiosClicked() {
+        if (uiState.value.bios == null) {
+            showMessage(LibraryMessage.BiosRequired)
+            return
+        }
+        // An empty URI reaches the core as an empty path, which it boots as BIOS only.
+        transient.update { it.copy(launchRequest = LaunchRequest(Uri.EMPTY, null)) }
+    }
+
     fun onGameSettingsClicked(game: Game) {
         viewModelScope.launch {
             val serial = readSerial(game) ?: return@launch
