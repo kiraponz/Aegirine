@@ -51,6 +51,7 @@ private fun landscapeLayout(size: Size, maxUnit: Float): TouchPadLayout {
     val clusterY = h - m - 3.2f * u
     val stickY = h - m - 1.2f * u
     val shoulder = Size(1.7f * u, 0.85f * u)
+    val extraGap = 1.25f * u
 
     return TouchPadLayout(
         u,
@@ -70,15 +71,12 @@ private fun landscapeLayout(size: Size, maxUnit: Float): TouchPadLayout {
 
             addAll(selectStart(Offset(w / 2, h - m - 0.35f * u), u))
         },
+        // Along the top between L1 and R1: below the shoulder buttons they sat on the D-pad and the face buttons.
         fastForward = Offset(w / 2, m + shoulder.height / 2),
-        // Below L2: nothing fits above it.
-        rewind = Offset(m + shoulder.width / 2, m + shoulder.height + 1.6f * u),
-        // Below R2, mirroring rewind.
-        screenshot = Offset(w - m - shoulder.width / 2, m + shoulder.height + 1.6f * u),
-        // Beside rewind, under L1.
-        macro = Offset(m + shoulder.width / 2 + 1.4f * u, m + shoulder.height + 1.6f * u),
-        // Beside screenshot, under R1.
-        ai = Offset(w - m - shoulder.width / 2 - 1.4f * u, m + shoulder.height + 1.6f * u),
+        rewind = Offset(w / 2 - 2 * extraGap, m + shoulder.height / 2),
+        macro = Offset(w / 2 - extraGap, m + shoulder.height / 2),
+        screenshot = Offset(w / 2 + extraGap, m + shoulder.height / 2),
+        ai = Offset(w / 2 + 2 * extraGap, m + shoulder.height / 2),
     )
 }
 
