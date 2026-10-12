@@ -78,6 +78,12 @@ class EmulationActivity : ComponentActivity() {
     /** True when onStop paused the VM, so onStart knows to resume it. */
     private var pausedWhileHidden = false
 
+    /** The suspend state onStop is writing, which onStart waits for before it lets the game go on. */
+    private var suspendSave: Job? = null
+
+    /** The suspend state this boot started from, until the game is up and it has been used. */
+    private var suspendFile: File? = null
+
     // Input goes straight to the core from the input callbacks, not through a ViewModel.
     private val gamepad by lazy { GamepadInput(core) }
     private val rumble by lazy { ControllerRumble { gamepad.lastDeviceId } }
@@ -198,7 +204,7 @@ class EmulationActivity : ComponentActivity() {
                     )
                     val current = settings
                     if (menuOpen && current != null) {
-                        InGameMenu(current, saveSlots, selectedSlot, stateBusy, menuActions)
+                        InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
                     }
                 }
             }
@@ -216,7 +222,7 @@ class EmulationActivity : ComponentActivity() {
             return
         }
 
-        if (!startVm(gameUri)) return
+        if (!startVm(gameUri, resume = true)) return
 
         // Settings changed during play (from anywhere in this process) reach the running game.
         val settings = container.settingsRepository
@@ -231,8 +237,11 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
-    /** Reads the settings and boots the game on a new emulation thread. False if it cannot. */
-    private suspend fun startVm(gameUri: Uri): Boolean {
+    /**
+     * Reads the settings and boots the game on a new emulation thread. False if it cannot.
+     * With [resume], a suspend state the game left behind is booted into instead of the start.
+     */
+    private suspend fun startVm(gameUri: Uri, resume: Boolean = false): Boolean {
         // Settings are read fresh on every boot rather than shared in memory with
         // MainActivity, so this activity can move to its own process.
         val settings = container.settingsRepository
@@ -249,19 +258,38 @@ class EmulationActivity : ComponentActivity() {
         apply(global, overrides)
         applyEmulationOrientation()
         applyOutputScale()
-        if (SettingsJson.merge(global, overrides).output.autoProgressiveScan) {
+        val suspended = serial?.takeIf { resume }?.let { withContext(Dispatchers.IO) { core.suspendStateFile(it) } }
+        suspendFile = suspended
+        core.setBootSaveState(suspended)
+        // The hold would press into the game that was restored, not one that is starting.
+        if (suspended == null && SettingsJson.merge(global, overrides).output.autoProgressiveScan) {
             startAutoProgressiveScanHold()
         } else {
             stopAutoProgressiveScanHold()
         }
         customDriverInUse = useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
-        Log.i(TAG, "Booting $gameUri (serial $serial)")
+        Log.i(TAG, "Booting $gameUri (serial $serial)" + if (suspended != null) " from ${suspended.name}" else "")
         emulationThread = thread(name = "Emulation") {
             val error = core.runVm(gameUri.toString())
             runOnUiThread { onVmStopped(gameUri, error) }
         }
+        suspended?.let { file ->
+            // Used once the VM is up: it has loaded the state by then. Kept until then so a
+            // driver fallback can boot into it again.
+            lifecycleScope.launch {
+                while (suspendFile === file && !core.hasActiveVm) delay(VM_POLL_MS)
+                discardSuspendState()
+            }
+        }
         return true
+    }
+
+    /** Deletes the suspend state this boot used, so a later start begins at the start. */
+    private fun discardSuspendState() {
+        val file = suspendFile ?: return
+        suspendFile = null
+        thread { file.delete() }
     }
 
     private fun onVmStopped(gameUri: Uri, error: String?) {
@@ -277,13 +305,17 @@ class EmulationActivity : ComponentActivity() {
             }
             error != null -> {
                 Log.e(TAG, "Boot failed: $error")
+                discardSuspendState()
                 finishWithMessage(getString(R.string.emulation_boot_failed, error))
             }
             restartRequested && !isDestroyed -> {
                 restartRequested = false
                 lifecycleScope.launch { startVm(gameUri) }
             }
-            else -> finish()
+            else -> {
+                discardSuspendState()
+                finish()
+            }
         }
     }
 
@@ -477,6 +509,20 @@ class EmulationActivity : ComponentActivity() {
             this@EmulationActivity.exit()
         }
 
+        override fun exitAndResumeLater() {
+            stateBusy = true
+            lifecycleScope.launch {
+                if (saveSuspendState()) {
+                    menuOpen = false
+                    pausedByMenu = false
+                    this@EmulationActivity.exit()
+                } else {
+                    stateBusy = false
+                    showMessage(getString(R.string.emulation_suspend_failed))
+                }
+            }
+        }
+
         override fun setShowFps(show: Boolean) = updateSetting("osd.osdShowFps") {
             it.copy(osd = it.osd.copy(osdShowFps = show))
         }
@@ -488,6 +534,21 @@ class EmulationActivity : ComponentActivity() {
         override fun setFastForwardSpeed(speed: Int) = updateSetting("frameLimit.fastForwardSpeed") {
             it.copy(frameLimit = it.frameLimit.copy(fastForwardSpeed = speed))
         }
+    }
+
+    /**
+     * Writes the suspend state with the game paused. A memory card that is mid-write refuses it,
+     * and only finishes while the game runs, so the game gets short turns until it is not busy.
+     */
+    private suspend fun saveSuspendState(): Boolean = withContext(Dispatchers.IO) {
+        repeat(SUSPEND_SAVE_TRIES) {
+            if (core.saveSuspendState()) return@withContext true
+            if (!core.isMemcardBusy) return@withContext false
+            core.resume()
+            delay(SUSPEND_SAVE_RETRY_MS)
+            core.pause()
+        }
+        false
     }
 
     /** Saves or loads the selected slot, then returns to the game. */
@@ -548,9 +609,15 @@ class EmulationActivity : ComponentActivity() {
         super.onStart()
         if (emulationThread == null) return
         core.setAppBackgrounded(false)
-        if (pausedWhileHidden) {
-            pausedWhileHidden = false
-            core.resume()
+        lifecycleScope.launch {
+            suspendSave?.join()
+            // Back before the process was lost: the game goes on from here, not from that state.
+            suspendSave = null
+            serial?.let { withContext(Dispatchers.IO) { core.suspendStateFile(it)?.delete() } }
+            if (pausedWhileHidden) {
+                pausedWhileHidden = false
+                core.resume()
+            }
         }
     }
 
@@ -594,6 +661,11 @@ class EmulationActivity : ComponentActivity() {
             pausedWhileHidden = true
         }
         core.setAppBackgrounded(true)
+        // Android may end this process while it is hidden. The state lets the next start go on
+        // from here; coming back first discards it (onStart).
+        if (serial != null && core.hasActiveVm && !stateBusy) {
+            suspendSave = lifecycleScope.launch { saveSuspendState() }
+        }
     }
 
     override fun onDestroy() {
@@ -691,6 +763,9 @@ class EmulationActivity : ComponentActivity() {
         private const val EXTRA_SYSTEM_DRIVER = "com.kira3.scphx.extra.SYSTEM_DRIVER"
         private const val EXTRA_FAILED_DRIVER = "com.kira3.scphx.extra.FAILED_DRIVER"
         private const val VM_STOP_WAIT_MS = 5_000L
+        private const val VM_POLL_MS = 200L
+        private const val SUSPEND_SAVE_TRIES = 10
+        private const val SUSPEND_SAVE_RETRY_MS = 250L
         private const val TOAST_VISIBLE_MS = 3_500L
 
         fun intent(context: Context, gameUri: Uri, serial: String?): Intent =

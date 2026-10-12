@@ -67,6 +67,9 @@ interface InGameMenuActions {
     fun screenshot()
     fun reset()
     fun exit()
+
+    /** Saves where the game stands, then exits; the next start picks up from there. */
+    fun exitAndResumeLater()
     fun setShowFps(show: Boolean)
     fun setFastForwardButton(show: Boolean)
     fun setFastForwardSpeed(speed: Int)
@@ -85,6 +88,7 @@ fun InGameMenu(
     slots: List<SaveSlot>?,
     selectedSlot: Int,
     busy: Boolean,
+    canResumeLater: Boolean,
     actions: InGameMenuActions,
 ) {
     var confirm by remember { mutableStateOf<Confirm?>(null) }
@@ -140,6 +144,9 @@ fun InGameMenu(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 MenuAction(stringResource(R.string.menu_screenshot), !busy, actions::screenshot)
                 MenuAction(stringResource(R.string.menu_reset), !busy) { confirm = Confirm.Reset }
+                if (canResumeLater) {
+                    MenuAction(stringResource(R.string.menu_exit_suspend), !busy, actions::exitAndResumeLater)
+                }
                 MenuAction(stringResource(R.string.menu_exit), !busy) { confirm = Confirm.Exit }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

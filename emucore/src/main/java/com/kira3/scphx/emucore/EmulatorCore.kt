@@ -351,6 +351,21 @@ class EmulatorCore(context: Context) {
     fun saveState(slot: Int): Boolean = NativeApp.saveStateToSlot(slot)
     fun loadState(slot: Int): Boolean = NativeApp.loadStateFromSlot(slot)
 
+    /**
+     * Saves the suspend state: where the game stands, for [suspendStateFile] to find the next
+     * time the game starts. It is the core's resume state, apart from the numbered slots.
+     */
+    fun saveSuspendState(): Boolean = NativeApp.saveStateToSlot(SUSPEND_SLOT)
+
+    /** The suspend state [serial] left behind, if any. Blocking I/O. */
+    fun suspendStateFile(serial: String): File? =
+        File(dataDir, SAVE_STATE_DIR).listFiles { file ->
+            file.name.startsWith("$serial (") && file.name.endsWith(".resume.p2s")
+        }?.maxByOrNull { it.lastModified() }
+
+    /** Makes the next [runVm] start from the save state at [file], or from the beginning for null. */
+    fun setBootSaveState(file: File?) = NativeApp.setBootSaveState(file?.absolutePath.orEmpty())
+
     /** True while the memory card is being written; a save state is refused then. */
     val isMemcardBusy: Boolean get() = NativeApp.isMemcardBusy()
 
@@ -423,6 +438,10 @@ class EmulatorCore(context: Context) {
     companion object {
         /** The save-state slots, as the core numbers them. */
         val SAVE_STATE_SLOTS: IntRange = 1..10
+
+        /** The core's resume state, which it keeps apart from the numbered slots. */
+        private const val SUSPEND_SLOT = -1
+        private const val SAVE_STATE_DIR = "sstates"
 
         private const val TAG = "EmulatorCore"
         private const val PAD_RANGE_MAX = 32767

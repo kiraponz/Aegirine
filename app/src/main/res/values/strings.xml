@@ -49,6 +49,7 @@
     <string name="emulation_state_save_failed">Could not save to slot %1$d</string>
     <string name="emulation_state_load_failed">Could not load slot %1$d</string>
     <string name="emulation_state_memcard_busy">The memory card is being written. Play for a moment and try again.</string>
+    <string name="emulation_suspend_failed">Could not save the game to resume later</string>
     <string name="emulation_screenshot_saved">Screenshot saved to Pictures/SCPHX</string>
     <string name="emulation_screenshot_failed">Could not save the screenshot</string>
 
@@ -63,6 +64,7 @@
     <string name="menu_screenshot">Take screenshot</string>
     <string name="menu_reset">Reset</string>
     <string name="menu_exit">Exit game</string>
+    <string name="menu_exit_suspend">Exit and resume later</string>
     <string name="menu_show_fps">Show FPS</string>
     <string name="menu_fast_forward_button">Fast-forward button</string>
     <string name="menu_fast_forward_speed">Fast-forward speed</string>
