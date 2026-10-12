@@ -50,6 +50,7 @@ import com.kira3.scphx.emulation.input.ControllerRumble
 import com.kira3.scphx.emulation.input.GamepadInput
 import com.kira3.scphx.emulation.input.PadSink
 import com.kira3.scphx.emulation.input.TouchPad
+import com.kira3.scphx.emulation.input.gameAspectOf
 import com.kira3.scphx.emucore.settings.EmulatorSettings
 import com.kira3.scphx.emucore.settings.SettingsJson
 import com.kira3.scphx.emucore.settings.SettingsOverrides
@@ -221,6 +222,7 @@ class EmulationActivity : ComponentActivity() {
                             null
                         },
                         floatingSticks = settings?.controls?.stickMode == 1,
+                        gameAspect = settings?.output?.let { gameAspectOf(it.aspectRatio, it.customAspectRatio) },
                         opacity = (settings?.controls?.padOpacity ?: 100) / 100f,
                         haptics = settings?.controls?.padHaptics != false,
                         screenshotButton = if (settings?.frameLimit?.screenshotButton == true) {

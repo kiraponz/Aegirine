@@ -61,6 +61,8 @@ interface PadSink {
  *
  * With [floatingSticks] the drawn sticks are replaced by ones that appear where a finger touches an
  * empty part of the screen (left half: left stick, right half: right stick) and go when it lifts.
+ * Held upright, a floating stick does not start on the picture, which the core draws at the top
+ * with the shape [gameAspect] (width / height; null when it fills the screen).
  * [opacity] fades the whole pad; [haptics] turns off the vibration on a press.
  *
  * [fastForwardButton], if given, is placed where the layout leaves room for it, and stays
@@ -76,6 +78,7 @@ fun TouchPad(
     rewindButton: (@Composable () -> Unit)? = null,
     screenshotButton: (@Composable () -> Unit)? = null,
     floatingSticks: Boolean = false,
+    gameAspect: Float? = null,
     opacity: Float = 1f,
     haptics: Boolean = true,
 ) {
@@ -108,11 +111,13 @@ fun TouchPad(
             Modifier
                 .fillMaxSize()
                 .alpha(opacity)
-                .pointerInput(layout, visible) {
+                .pointerInput(layout, visible, floatingSticks, gameAspect) {
                     if (visible) {
                         tracker.layout = layout
                         tracker.floating = floatingSticks
                         tracker.areaWidth = size.width.toFloat()
+                        tracker.gameBottom =
+                            if (gameAspect != null && size.height > size.width) size.width / gameAspect else 0f
                         try {
                             awaitPointerEventScope {
                                 while (true) tracker.handle(awaitPointerEvent().changes)
@@ -181,6 +186,9 @@ private class TouchTracker(
     var floating = false
     var areaWidth = 0f
 
+    /** Floating sticks cannot start above this (the picture); 0 = anywhere. */
+    var gameBottom = 0f
+
     /** Where each floating stick was put down; absent while it is not held. */
     val floatingOrigins = mutableStateMapOf<PadStick, Offset>()
 
@@ -212,7 +220,7 @@ private class TouchTracker(
                         null -> {
                             val stick = if (change.position.x < areaWidth / 2) PadStick.Left else PadStick.Right
                             val taken = fingers.values.any { it is Finger.OnFloatingStick && it.stick == stick }
-                            if (!floating || taken) continue
+                            if (!floating || taken || change.position.y < gameBottom) continue
                             Finger.OnFloatingStick(stick, change.position, Offset.Zero)
                         }
                     }
