@@ -87,11 +87,15 @@ internal object NativeApp {
     @JvmStatic external fun setNominalSpeed(percent: Int)
     /** 0 Nominal, 1 Turbo, 2 Slow motion, 3 Unlimited. */
     @JvmStatic external fun speedhackLimitermode(mode: Int)
+    /** Speed of Turbo mode as a multiple of full speed (0.05..10). Takes effect when Turbo is next set. */
+    @JvmStatic external fun setTurboScalar(scalar: Float)
     @JvmStatic external fun applyFramerateLive(ntsc: Float, pal: Float)
     // Runtime only, no settings key.
     @JvmStatic external fun setFpsCap(fps: Int)
     @JvmStatic external fun setPortraitRenderTop(top: Boolean)
     @JvmStatic external fun setLandscapeRenderTop(top: Boolean)
+    /** PerformanceHintManager (ADPF) for the emulation threads. Does nothing below Android 13. */
+    @JvmStatic external fun setAdpfEnabled(enabled: Boolean)
     /** Read when the VM boots. */
     @JvmStatic external fun setAffinityMode(mode: Int)
 

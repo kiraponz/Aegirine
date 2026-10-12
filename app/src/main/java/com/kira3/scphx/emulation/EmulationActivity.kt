@@ -19,6 +19,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -40,6 +41,7 @@ import com.kira3.scphx.emulation.input.ControllerRumble
 import com.kira3.scphx.emulation.input.GamepadInput
 import com.kira3.scphx.emulation.input.PadSink
 import com.kira3.scphx.emulation.input.TouchPad
+import com.kira3.scphx.emucore.settings.EmulatorSettings
 import com.kira3.scphx.emucore.settings.SettingsJson
 import com.kira3.scphx.emucore.settings.SettingsOverrides
 import kotlinx.coroutines.flow.drop
@@ -80,6 +82,9 @@ class EmulationActivity : ComponentActivity() {
     /** The touch pad hides while a controller is in use and comes back on a touch. */
     private var touchPadVisible by mutableStateOf(true)
 
+    /** Shown once the game's settings are read, if they ask for it. */
+    private var fastForwardButton by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val gameUri = IntentCompat.getParcelableExtra(intent, EXTRA_GAME_URI, Uri::class.java)
@@ -109,6 +114,14 @@ class EmulationActivity : ComponentActivity() {
                     sink = touchSink,
                     visible = touchPadVisible,
                     onShowRequest = { touchPadVisible = true },
+                    fastForwardButton = if (fastForwardButton) {
+                        {
+                            val fastForward by core.fastForward.collectAsState()
+                            FastForwardButton(active = fastForward, onActiveChange = core::setFastForward)
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
         }
@@ -139,7 +152,7 @@ class EmulationActivity : ComponentActivity() {
             return
         }
         core.setBios(bios)
-        core.applySettings(global, overrides, serial)
+        apply(global, overrides, serial)
 
         Log.i(TAG, "Booting $gameUri (serial $serial)")
         emulationThread = thread(name = "Emulation") {
@@ -159,9 +172,14 @@ class EmulationActivity : ComponentActivity() {
             settings.changes.drop(1).collect {
                 if (!core.hasActiveVm) return@collect
                 val current = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
-                core.applySettings(settings.loadGlobal(), current, serial)
+                apply(settings.loadGlobal(), current, serial)
             }
         }
+    }
+
+    private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides, serial: String?) {
+        core.applySettings(global, overrides, serial)
+        fastForwardButton = SettingsJson.merge(global, overrides).frameLimit.fastForwardButton
     }
 
     private val surfaceCallback = object : SurfaceHolder.Callback {

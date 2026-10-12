@@ -17,7 +17,8 @@ internal sealed interface TouchControl {
     data class Stick(val stick: PadStick, val center: Offset, val radius: Float) : TouchControl
 }
 
-internal class TouchPadLayout(val unit: Float, val controls: List<TouchControl>)
+/** [fastForward] is the center of the fast-forward button, which the pad does not draw itself. */
+internal class TouchPadLayout(val unit: Float, val controls: List<TouchControl>, val fastForward: Offset)
 
 /**
  * Places the controls for an area of [size]. Everything is sized from one unit, so the pad
@@ -55,6 +56,7 @@ private fun landscapeLayout(size: Size, maxUnit: Float): TouchPadLayout {
 
             addAll(selectStart(Offset(w / 2, h - m - 0.35f * u), u))
         },
+        fastForward = Offset(w / 2, m + shoulder.height / 2),
     )
 }
 
@@ -85,6 +87,8 @@ private fun portraitLayout(size: Size, maxUnit: Float): TouchPadLayout {
             add(round(PadButton.L3, Offset(m + 0.5f * u, stickY + 0.75f * u), 0.42f * u))
             add(round(PadButton.R3, Offset(w - m - 0.5f * u, stickY + 0.75f * u), 0.42f * u))
         },
+        // Under Select/Start, between the D-pad and the face buttons.
+        fastForward = Offset(w / 2, top + 1.6f * u),
     )
 }
 

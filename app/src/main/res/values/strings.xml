@@ -20,6 +20,7 @@
     <!-- Emulation -->
     <string name="emulation_boot_failed">Could not start the game: %1$s</string>
     <string name="emulation_bios_missing">Select a BIOS first</string>
+    <string name="emulation_fast_forward">Fast forward</string>
 
     <!-- Touch pad button labels: the names printed on a DualShock 2 -->
     <string name="pad_l1">L1</string>

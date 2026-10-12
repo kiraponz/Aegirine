@@ -2,6 +2,7 @@ package com.kira3.scphx.emulation.input
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
@@ -28,6 +29,7 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -42,6 +44,7 @@ import com.kira3.scphx.R
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Where the touch pad sends its input. Called on the UI thread, straight from touch handling. */
 interface PadSink {
@@ -54,6 +57,9 @@ interface PadSink {
  * controls can be held at once; a finger can slide between buttons and across the D-pad.
  *
  * While hidden ([visible] false) it draws nothing, and a touch anywhere calls [onShowRequest].
+ *
+ * [fastForwardButton], if given, is placed where the layout leaves room for it, and stays
+ * while the pad is hidden.
  */
 @Composable
 fun TouchPad(
@@ -61,6 +67,7 @@ fun TouchPad(
     visible: Boolean,
     onShowRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    fastForwardButton: (@Composable () -> Unit)? = null,
 ) {
     val view = LocalView.current
     val tracker = remember(sink) {
@@ -114,6 +121,20 @@ fun TouchPad(
         ) {
             if (visible) drawPad(layout, tracker, labels, textMeasurer)
         }
+        if (fastForwardButton != null) {
+            Box(Modifier.centeredAt(layout.fastForward)) { fastForwardButton() }
+        }
+    }
+}
+
+/** Places the content with its center at [center]. */
+private fun Modifier.centeredAt(center: Offset): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+    layout(placeable.width, placeable.height) {
+        placeable.place(
+            (center.x - placeable.width / 2f).roundToInt(),
+            (center.y - placeable.height / 2f).roundToInt(),
+        )
     }
 }
 

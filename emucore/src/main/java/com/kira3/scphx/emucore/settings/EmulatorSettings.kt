@@ -90,6 +90,10 @@ data class FrameLimitSettings(
     val nominalSpeedPercent: Int = 100,
     /** Caps the presented frame rate without slowing the game. 0 = off. Runtime only. */
     val fpsLimit: Int = 0,
+    /** Fast-forward speed as a multiple of full speed (2..10), or 0 for as fast as possible. App side. */
+    val fastForwardSpeed: Int = 0,
+    /** Show the fast-forward button over the game. App side. */
+    val fastForwardButton: Boolean = true,
 )
 
 /** Audio output (SPU2). */
@@ -344,6 +348,8 @@ data class OutputSettings(
     val autoProgressiveScan: Boolean = false,
     /** Emulation thread placement: 0 off, 1-6 EE/VU/GS orders, 7 performance cores. Applies on the next boot. */
     val affinityMode: Int = 7,
+    /** Report each frame's CPU work to Android (ADPF, Android 13+) so it clocks the emulation threads up. Runtime only. */
+    val performanceHint: Boolean = false,
     /** EmuCore/GS/FramerateNTSC. */
     val framerateNtsc: Float = 59.94f,
     /** EmuCore/GS/FrameratePAL. */

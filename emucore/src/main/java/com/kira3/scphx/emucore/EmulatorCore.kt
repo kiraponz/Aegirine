@@ -118,6 +118,8 @@ class EmulatorCore(context: Context) {
     fun commitSettings() = NativeApp.commitSettings()
 
     private val applyMutex = Mutex()
+
+    @Volatile
     private var lastApplied: EmulatorSettings? = null
 
     /** What the last boot was given, global and effective; see [applySettings]. */
@@ -172,8 +174,9 @@ class EmulatorCore(context: Context) {
             NativeApp.setPortraitRenderTop(effective.output.portraitRenderTop)
             NativeApp.setLandscapeRenderTop(effective.output.landscapeRenderTop)
             NativeApp.setAffinityMode(effective.output.affinityMode.coerceIn(0, 7))
+            NativeApp.setAdpfEnabled(effective.output.performanceHint)
             if (running) {
-                NativeApp.speedhackLimitermode(if (effective.frameLimit.frameLimitEnable) 0 else 3)
+                NativeApp.speedhackLimitermode(limiterMode(effective))
                 NativeApp.setNominalSpeed(effective.frameLimit.nominalSpeedPercent.coerceIn(10, 1000))
                 val previous = lastApplied
                 if (previous == null || previous.output.framerateNtsc != effective.output.framerateNtsc ||
@@ -212,6 +215,34 @@ class EmulatorCore(context: Context) {
         }
         NativeApp.gameIniCommitWrite()
         if (running) NativeApp.reloadGameSettingsLayer()
+    }
+
+    // ---- Fast forward ----
+
+    private val _fastForward = MutableStateFlow(false)
+
+    /** True while the running game is fast-forwarded. Every boot starts at normal speed. */
+    val fastForward: StateFlow<Boolean> = _fastForward.asStateFlow()
+
+    /** Fast-forwards the running game, or returns it to normal speed. */
+    fun setFastForward(on: Boolean) {
+        _fastForward.value = on
+        val settings = lastApplied ?: return
+        if (NativeApp.hasActiveVM()) NativeApp.speedhackLimitermode(limiterMode(settings))
+    }
+
+    /** The core's limiter mode for [settings], honouring [fastForward]. */
+    private fun limiterMode(settings: EmulatorSettings): Int {
+        val frameLimit = settings.frameLimit
+        return when {
+            !_fastForward.value -> if (frameLimit.frameLimitEnable) LIMITER_NOMINAL else LIMITER_UNLIMITED
+            frameLimit.fastForwardSpeed == 0 -> LIMITER_UNLIMITED
+            else -> {
+                // Turbo reads the scalar when the mode is set, so this goes first.
+                NativeApp.setTurboScalar(frameLimit.fastForwardSpeed.coerceIn(2, 10).toFloat())
+                LIMITER_TURBO
+            }
+        }
     }
 
     // ---- BIOS and games ----
@@ -260,6 +291,8 @@ class EmulatorCore(context: Context) {
     fun runVm(gameUri: String): String? {
         check(initialized) { "EmulatorCore.initialize() has not completed" }
         _vmState.value = VmState.Starting
+        // The core boots at the speed the settings give it.
+        _fastForward.value = false
         return try {
             // runVMThread returns true even when the boot fails; the reason is left in
             // getLastBootError. It returns false only when the host checks fail first.
@@ -333,5 +366,10 @@ class EmulatorCore(context: Context) {
     private companion object {
         const val TAG = "EmulatorCore"
         const val PAD_RANGE_MAX = 32767
+
+        // NativeApp.speedhackLimitermode values.
+        const val LIMITER_NOMINAL = 0
+        const val LIMITER_TURBO = 1
+        const val LIMITER_UNLIMITED = 3
     }
 }
