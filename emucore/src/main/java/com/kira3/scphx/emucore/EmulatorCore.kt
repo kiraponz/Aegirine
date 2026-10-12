@@ -362,6 +362,9 @@ class EmulatorCore(context: Context) {
 
     val fps: Float get() = NativeApp.getFPS()
 
+    /** "00000000" until the game's ELF is running. */
+    val gameCrc: String get() = runCatching { NativeApp.getGameCRC() }.getOrDefault("00000000")
+
     // ---- Surface (from SurfaceHolder.Callback) ----
 
     fun onSurfaceCreated() = NativeApp.onNativeSurfaceCreated()
@@ -369,6 +372,13 @@ class EmulatorCore(context: Context) {
         NativeApp.onNativeSurfaceChanged(surface, width, height)
     fun onSurfaceDestroyed() = NativeApp.onNativeSurfaceDestroyed()
     fun setDisplayRefreshRate(hz: Float) = NativeApp.setDisplayRefreshRate(hz)
+
+    /**
+     * Tells the GS how far to shift a top-aligned portrait render down so it clears
+     * the display cutout, in surface (buffer) pixels. Shifting never crops: the
+     * top-align path always has spare room below the picture.
+     */
+    fun setPortraitRenderTopInset(pixels: Int) = NativeApp.setPortraitRenderTopInset(pixels)
 
     // ---- Input ----
     // Call these directly from input handlers, not through a ViewModel, to keep latency low.

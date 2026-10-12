@@ -93,6 +93,8 @@ internal object NativeApp {
     // Runtime only, no settings key.
     @JvmStatic external fun setFpsCap(fps: Int)
     @JvmStatic external fun setPortraitRenderTop(top: Boolean)
+    /** Display-cutout height in surface pixels; shifts a top-aligned portrait render down. */
+    @JvmStatic external fun setPortraitRenderTopInset(pixels: Int)
     @JvmStatic external fun setLandscapeRenderTop(top: Boolean)
     /** PerformanceHintManager (ADPF) for the emulation threads. Does nothing below Android 13. */
     @JvmStatic external fun setAdpfEnabled(enabled: Boolean)
@@ -138,6 +140,7 @@ internal object NativeApp {
     @JvmStatic external fun getGameSerialFromFd(fd: Int): String?
     @JvmStatic external fun getGameTitle(path: String): String
     @JvmStatic external fun getGameSerial(): String
+    /** "00000000" until the game's ELF is running. */
     @JvmStatic external fun getGameCRC(): String
     @JvmStatic external fun getTitlesForSerial(serial: String): String
     @JvmStatic external fun getRegionForSerial(serial: String): String

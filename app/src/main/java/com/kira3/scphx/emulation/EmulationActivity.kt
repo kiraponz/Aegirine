@@ -2,6 +2,7 @@ package com.kira3.scphx.emulation
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.IntentCompat
 import androidx.core.view.WindowCompat
@@ -48,8 +50,11 @@ import com.kira3.scphx.emucore.settings.EmulatorSettings
 import com.kira3.scphx.emucore.settings.SettingsJson
 import com.kira3.scphx.emucore.settings.SettingsOverrides
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -91,6 +96,19 @@ class EmulationActivity : ComponentActivity() {
     private var settings by mutableStateOf<EmulatorSettings?>(null)
 
     private var serial: String? = null
+
+    /** Layout size of the game view; the output buffer is scaled from this. */
+    private var viewWidth = 0
+    private var viewHeight = 0
+    private var surfaceHolder: SurfaceHolder? = null
+    private var surfaceView: SurfaceView? = null
+
+    /** Live buffer size (post setFixedSize); the cutout inset is scaled to this. */
+    private var bufferWidth = 0
+    private var bufferHeight = 0
+
+    /** Holds Triangle+Cross through boot while auto progressive scan is on. */
+    private var progressiveScanJob: Job? = null
 
     private val screenshots by lazy { Screenshots(applicationContext, core) }
 
@@ -139,9 +157,16 @@ class EmulationActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     AndroidView(
                         factory = { context ->
-                            SurfaceView(context).apply { holder.addCallback(surfaceCallback) }
+                            SurfaceView(context).apply {
+                                holder.addCallback(surfaceCallback)
+                                surfaceView = this
+                            }
                         },
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().onSizeChanged {
+                            viewWidth = it.width
+                            viewHeight = it.height
+                            applyOutputScale()
+                        },
                     )
                     TouchPad(
                         sink = touchSink,
@@ -185,6 +210,8 @@ class EmulationActivity : ComponentActivity() {
                 if (!core.hasActiveVm) return@collect
                 val current = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
                 apply(settings.loadGlobal(), current)
+                applyEmulationOrientation()
+                applyOutputScale()
             }
         }
     }
@@ -205,6 +232,13 @@ class EmulationActivity : ComponentActivity() {
         }
         core.setBios(bios)
         apply(global, overrides)
+        applyEmulationOrientation()
+        applyOutputScale()
+        if (SettingsJson.merge(global, overrides).output.autoProgressiveScan) {
+            startAutoProgressiveScanHold()
+        } else {
+            stopAutoProgressiveScanHold()
+        }
         useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
         Log.i(TAG, "Booting $gameUri (serial $serial)")
@@ -216,6 +250,7 @@ class EmulationActivity : ComponentActivity() {
     }
 
     private fun onVmStopped(gameUri: Uri, error: String?) {
+        stopAutoProgressiveScanHold()
         when {
             error != null -> {
                 Log.e(TAG, "Boot failed: $error")
@@ -245,6 +280,105 @@ class EmulationActivity : ComponentActivity() {
     private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides) {
         core.applySettings(global, overrides, serial)
         settings = SettingsJson.merge(global, overrides)
+    }
+
+    /**
+     * Locks the play screen's orientation. Only assigns when it changes: writing
+     * requestedOrientation makes Android re-evaluate even an identical value, and each
+     * change rebuilds the Vulkan swapchain (ARMSX2 hit multi-second picture freezes).
+     */
+    private fun applyEmulationOrientation() {
+        val effective = settings ?: return
+        val requested = when (effective.output.orientation.coerceIn(0, 3)) {
+            1 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            2 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            3 -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (requestedOrientation != requested) requestedOrientation = requested
+    }
+
+    /** Pins the output buffer size from hwScaler/screenResOverride; see OutputScale.kt. */
+    private fun applyOutputScale() {
+        val holder = surfaceHolder ?: return
+        val effective = settings ?: return
+        val buffer = outputBufferSize(viewWidth, viewHeight, effective.output.hwScaler, effective.output.screenResOverride)
+        if (buffer == null) {
+            bufferWidth = viewWidth
+            bufferHeight = viewHeight
+            holder.setSizeFromLayout()
+        } else {
+            bufferWidth = buffer.first
+            bufferHeight = buffer.second
+            holder.setFixedSize(buffer.first, buffer.second)
+        }
+        pushDisplayCutoutInset()
+    }
+
+    /**
+     * Shifts a top-aligned portrait render below the display cutout (punch-hole /
+     * notch camera). Top-aligning put the picture directly under the camera, which
+     * sat on the game. Sent on creation and every rotation/resize, in the surface
+     * pixels the renderer works in.
+     */
+    private fun pushDisplayCutoutInset() {
+        val view = surfaceView ?: return
+        // Landscape: the cutout is on a side, so shifting vertically would not help.
+        val inset = if (viewHeight > viewWidth && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            runCatching { view.rootWindowInsets?.displayCutout?.safeInsetTop ?: 0 }.getOrDefault(0)
+        } else {
+            0
+        }
+        core.setPortraitRenderTopInset(scaleInsetToBuffer(inset, viewHeight, bufferHeight))
+    }
+
+    /**
+     * Holds Triangle+Cross through boot, the combo some games probe to offer 480p
+     * progressive scan. Purely synthetic pad input; games without the prompt ignore it.
+     */
+    private fun startAutoProgressiveScanHold() {
+        stopAutoProgressiveScanHold()
+        // Not on the emulation thread: runVm blocks it for the whole session.
+        progressiveScanJob = lifecycleScope.launch(Dispatchers.Default) {
+            var held = false
+            try {
+                var waited = 0L
+                while (!core.hasActiveVm && isActive && waited < AUTO_PROGRESSIVE_VM_WAIT_MS) {
+                    delay(100)
+                    waited += 100
+                }
+                if (!core.hasActiveVm) return@launch
+                held = true
+                // Re-assert on a short interval so the game never samples a gap
+                // (e.g. across the pad re-init during boot). Stops soon after the
+                // game's ELF starts; holding into menus would fight the player.
+                var elapsed = 0L
+                var sinceElf = -1L
+                while (elapsed < AUTO_PROGRESSIVE_HOLD_MS && isActive) {
+                    if (!core.hasActiveVm) return@launch
+                    core.setPadButton(PORT, PadButton.Triangle, true)
+                    core.setPadButton(PORT, PadButton.Cross, true)
+                    delay(AUTO_PROGRESSIVE_REASSERT_MS)
+                    elapsed += AUTO_PROGRESSIVE_REASSERT_MS
+                    val elfRunning = core.gameCrc.let { it.length == 8 && it != "00000000" }
+                    if (elfRunning) {
+                        sinceElf = if (sinceElf < 0) 0 else sinceElf + AUTO_PROGRESSIVE_REASSERT_MS
+                        if (sinceElf >= AUTO_PROGRESSIVE_POST_ELF_MS) break
+                    }
+                }
+            } finally {
+                // Release on every exit path, cancellation included.
+                if (held && core.hasActiveVm) {
+                    core.setPadButton(PORT, PadButton.Triangle, false)
+                    core.setPadButton(PORT, PadButton.Cross, false)
+                }
+            }
+        }
+    }
+
+    private fun stopAutoProgressiveScanHold() {
+        progressiveScanJob?.cancel()
+        progressiveScanJob = null
     }
 
     private fun openMenu() {
@@ -363,16 +497,23 @@ class EmulationActivity : ComponentActivity() {
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
+            surfaceHolder = holder
             core.onSurfaceCreated()
+            applyOutputScale()
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             // Before onSurfaceChanged: the core reads it when it (re)acquires the window.
             displayRefreshRate()?.let(core::setDisplayRefreshRate)
             core.onSurfaceChanged(holder.surface, width, height)
+            // width/height are the live buffer size; keep the cutout inset scaled to it.
+            bufferWidth = width
+            bufferHeight = height
+            pushDisplayCutoutInset()
         }
 
         override fun surfaceDestroyed(holder: SurfaceHolder) {
+            if (surfaceHolder === holder) surfaceHolder = null
             core.onSurfaceDestroyed()
         }
     }
@@ -432,6 +573,7 @@ class EmulationActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         core.rumbleHandler = null
+        stopAutoProgressiveScanHold()
         // configChanges keeps rotation from recreating this activity, so being destroyed
         // means the game is over.
         if (emulationThread != null && core.hasActiveVm) core.shutdown()
@@ -481,6 +623,15 @@ class EmulationActivity : ComponentActivity() {
 
         /** Player 1. Both the touch pad and controllers play as player 1 for now. */
         private const val PORT = 0
+
+        /** How long to keep Triangle+Cross held. Some titles probe it well after the PS2 logo. */
+        private const val AUTO_PROGRESSIVE_HOLD_MS = 30_000L
+        /** How often the hold is re-pressed, so the game never samples a gap. */
+        private const val AUTO_PROGRESSIVE_REASSERT_MS = 200L
+        /** Let go this long after the game's ELF starts; holding into menus would fight the player. */
+        private const val AUTO_PROGRESSIVE_POST_ELF_MS = 8_000L
+        /** Pad writes are dropped with no VM, so wait for boot rather than pressing into the void. */
+        private const val AUTO_PROGRESSIVE_VM_WAIT_MS = 15_000L
         private const val EXTRA_GAME_URI = "com.kira3.scphx.extra.GAME_URI"
         private const val EXTRA_SERIAL = "com.kira3.scphx.extra.SERIAL"
 

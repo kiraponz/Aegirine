@@ -78,6 +78,14 @@ object SettingsCatalog {
                     visibleWhen = { it.int("output.aspectRatio") == 8 },
                 ),
                 Toggle("emuCore.enableWideScreenPatches", R.string.settings_widescreen_patches, R.string.settings_widescreen_patches_summary),
+                Choice(
+                    "output.orientation", R.string.settings_orientation, R.string.settings_orientation_summary,
+                    options(
+                        res(R.string.settings_opt_device), res(R.string.settings_opt_landscape),
+                        res(R.string.settings_opt_portrait), res(R.string.settings_opt_auto_rotate),
+                    ),
+                    inline = true,
+                ),
             ),
         ),
         SettingsSection(
@@ -107,6 +115,22 @@ object SettingsCatalog {
         SettingsSection(
             R.string.settings_section_display,
             listOf(
+                Choice(
+                    "output.hwScaler", R.string.settings_display_resolution, R.string.settings_display_resolution_summary,
+                    listOf(
+                        Option(0, res(R.string.settings_opt_screen)), Option(3, text("3x PS2")),
+                        Option(2, text("2x PS2")), Option(1, text("1x PS2")),
+                    ),
+                    inline = true,
+                ),
+                Choice(
+                    "output.screenResOverride", R.string.settings_screen_res_override, R.string.settings_screen_res_override_summary,
+                    listOf(
+                        Option("auto", res(R.string.settings_opt_auto)), Option("2560x1440", text("1440p")),
+                        Option("1920x1080", text("1080p")), Option("1280x720", text("720p")),
+                    ),
+                    inline = true,
+                ),
                 Choice(
                     "output.fmvAspectRatio", R.string.settings_fmv_aspect_ratio, R.string.settings_fmv_aspect_ratio_summary,
                     options(off, res(R.string.settings_opt_aspect_auto), *aspectRatios.toTypedArray(), res(R.string.settings_opt_custom)),
@@ -364,6 +388,7 @@ object SettingsCatalog {
             R.string.settings_section_boot,
             listOf(
                 Toggle("emuCore.enableFastBoot", R.string.settings_fast_boot, R.string.settings_fast_boot_summary),
+                Toggle("output.autoProgressiveScan", R.string.settings_auto_progressive, R.string.settings_auto_progressive_summary),
                 GameBiosSetting,
             ),
         ),
