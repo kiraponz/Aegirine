@@ -84,6 +84,13 @@ class EmulatorCore(context: Context) {
             }
             NativeApp.initialize(dataDir.absolutePath, biosDir.absolutePath, Build.VERSION.SDK_INT)
 
+            // The Auto renderer picks Vulkan or OpenGL from the GL driver's identity; without
+            // these strings it stays on OpenGL even on Adreno, where Vulkan is the fast path.
+            runCatching { GlStrings.probe() }
+                .onFailure { Log.w(TAG, "Probing the GL driver failed", it) }
+                .getOrNull()
+                ?.let { NativeApp.setAutoRendererGpuStrings(it.vendor.orEmpty(), it.renderer.orEmpty(), it.version.orEmpty()) }
+
             // SDL's Java side, which the core's SDL gamepad input talks to.
             SDLControllerManager.nativeSetupJNI()
             SDLControllerManager.initialize()

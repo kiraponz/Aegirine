@@ -98,6 +98,7 @@ internal object NativeApp {
     @JvmStatic external fun setLandscapeRenderTop(top: Boolean)
     /** PerformanceHintManager (ADPF) for the emulation threads. Does nothing below Android 13. */
     @JvmStatic external fun setAdpfEnabled(enabled: Boolean)
+    @JvmStatic external fun setAutoRendererGpuStrings(vendor: String, renderer: String, version: String)
     /** Read when the VM boots. */
     @JvmStatic external fun setAffinityMode(mode: Int)
     /**
