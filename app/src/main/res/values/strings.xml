@@ -600,4 +600,42 @@
         <item quantity="one">%1$d input</item>
         <item quantity="other">%1$d inputs</item>
     </plurals>
+
+    <string name="settings_misc">Miscellaneous</string>
+    <string name="settings_misc_summary">Gemini</string>
+    <string name="settings_section_gemini">Gemini</string>
+    <string name="settings_gemini_enabled">Gemini assistant</string>
+    <string name="settings_gemini_enabled_summary">Shows an AI button over the game. It sends a screenshot of the game and your question to Google\'s Gemini API</string>
+    <string name="settings_gemini_key">API key</string>
+    <string name="settings_gemini_key_summary">Your Gemini API key. It stays on this device and is sent only to Google</string>
+    <string name="settings_gemini_key_set">Set</string>
+    <string name="settings_gemini_key_unset">Not set</string>
+    <string name="settings_gemini_model">Model</string>
+    <string name="settings_gemini_model_summary">The models your API key can use, fetched from Google</string>
+    <string name="settings_gemini_models_no_key">Set the API key first. The list of models comes from Google.</string>
+    <string name="settings_gemini_models_rejected">Google rejected the request: %1$s</string>
+    <string name="settings_gemini_models_network">Could not reach Google. Check the connection.</string>
+    <string name="settings_retry">Retry</string>
+    <string name="settings_gemini_prompt">System prompt</string>
+    <string name="settings_gemini_prompt_summary">Sent with every question, for example to ask for short answers in a language. Empty sends none</string>
+    <string name="settings_text_empty">Empty</string>
+
+    <string name="ai_button">Ask Gemini</string>
+    <string name="ai_title">Ask Gemini</string>
+    <string name="ai_question_hint">Ask about this screen</string>
+    <string name="ai_send">Ask</string>
+    <string name="ai_no_key">Set the Gemini API key in Settings > Miscellaneous first</string>
+    <string name="ai_capture_failed">Could not capture the screen</string>
+    <string name="ai_error_rejected">Google rejected the request: %1$s</string>
+    <string name="ai_error_empty">Gemini gave no answer (%1$s)</string>
+    <string name="ai_error_network">Could not reach Google. Check the connection.</string>
+    <string name="menu_show_memos">Show memos</string>
+    <string name="settings_gemini_memos">Show memos</string>
+    <string name="settings_gemini_memos_summary">Shows the memos saved from answers as cards over the game. Drag a card by its title to move it</string>
+    <string name="ai_save_memo">Save as memo</string>
+    <string name="ai_memo_saved">Saved as memo</string>
+    <string name="memo_expand">Expand</string>
+    <string name="memo_collapse">Collapse</string>
+    <string name="memo_delete">Delete</string>
+    <string name="memo_delete_title">Delete this memo?</string>
 </resources>

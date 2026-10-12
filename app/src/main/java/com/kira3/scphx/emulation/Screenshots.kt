@@ -23,18 +23,27 @@ class Screenshots(private val context: Context, private val core: EmulatorCore) 
         val dir = File(core.dataDir, "snaps").apply { mkdirs() }
         // The core takes the path as is only when it ends in .png.
         val png = File(dir, "${serial ?: "SCPHX"}_${System.currentTimeMillis()}.png")
+        if (!capture(png)) return@withContext false
+        runCatching { publish(png) }
+            .onFailure { Log.e(TAG, "Could not publish $png", it) }
+            .isSuccess
+    }
+
+    /** Captures the next frame into the app's cache, not the gallery. The caller deletes the file. Null if it never arrived. */
+    suspend fun captureTemporary(): File? = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "temp-shots").apply { mkdirs() }
+        File(dir, "${System.currentTimeMillis()}.png").takeIf { capture(it) }
+    }
+
+    /** Has the core write the next frame to [png] and waits until the file is complete. */
+    private suspend fun capture(png: File): Boolean {
         core.saveScreenshot(png)
         // The core compresses on its own thread, so wait for the file to be complete.
         val written = withTimeoutOrNull(TIMEOUT_MS) {
             while (!isCompletePng(png)) delay(POLL_MS)
         } != null
-        if (!written) {
-            Log.w(TAG, "Screenshot never arrived: $png")
-            return@withContext false
-        }
-        runCatching { publish(png) }
-            .onFailure { Log.e(TAG, "Could not publish $png", it) }
-            .isSuccess
+        if (!written) Log.w(TAG, "Screenshot never arrived: $png")
+        return written
     }
 
     private fun publish(png: File) {

@@ -4,6 +4,9 @@
     <!-- Rumble on the controller being played with -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Asking Gemini about the game screen (the Gemini settings) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".ScphxApplication"
         android:allowBackup="true"

@@ -74,6 +74,7 @@ interface InGameMenuActions {
     fun cheats()
     fun macros()
     fun setMacroButton(show: Boolean)
+    fun setShowMemos(show: Boolean)
     fun setShowFps(show: Boolean)
     fun setFastForwardButton(show: Boolean)
     fun setScreenshotButton(show: Boolean)
@@ -183,6 +184,14 @@ fun InGameMenu(
                         settings.frameLimit.macroButton,
                         !busy,
                         actions::setMacroButton,
+                    )
+                }
+                if (hasGame && settings.gemini.enabled) {
+                    MenuSwitch(
+                        stringResource(R.string.menu_show_memos),
+                        settings.gemini.memosVisible,
+                        !busy,
+                        actions::setShowMemos,
                     )
                 }
                 FastForwardSpeed(settings.frameLimit.fastForwardSpeed, !busy, actions::setFastForwardSpeed)

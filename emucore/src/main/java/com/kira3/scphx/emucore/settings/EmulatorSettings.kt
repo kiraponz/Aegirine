@@ -29,6 +29,7 @@ data class EmulatorSettings(
     val osd: OsdSettings = OsdSettings(),
     val rewind: RewindSettings = RewindSettings(),
     val controls: ControlsSettings = ControlsSettings(),
+    val gemini: GeminiSettings = GeminiSettings(),
 ) {
     val effectiveVu1ClampMode: Int get() = if (cpu.vu1ClampMode < 0) cpu.vuClampMode else cpu.vu1ClampMode
 }
@@ -122,6 +123,19 @@ data class FrameLimitSettings(
     val screenshotButton: Boolean = false,
     /** Show a macro button over the game. Off by default. App side. */
     val macroButton: Boolean = false,
+)
+
+/** Asking Gemini about the game screen. App side only: none of these reach the core. The API key is kept apart from settings. */
+@Serializable
+data class GeminiSettings(
+    /** Show the AI button over the game. */
+    val enabled: Boolean = false,
+    /** Gemini model name, as the API takes it. */
+    val model: String = "gemini-2.5-flash",
+    /** Sent as the system instruction with every question. Empty sends none. */
+    val systemPrompt: String = "",
+    /** Show the saved memos over the game. */
+    val memosVisible: Boolean = true,
 )
 
 /** Audio output (SPU2). */

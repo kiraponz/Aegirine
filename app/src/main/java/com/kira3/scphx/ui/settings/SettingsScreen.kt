@@ -178,6 +178,7 @@ private fun CategoryIcon(category: SettingsCategory, index: Int) {
         SettingsCategory.Controls -> MaterialShapes.Gem
         SettingsCategory.System -> MaterialShapes.Pentagon
         SettingsCategory.Advanced -> MaterialShapes.Cookie6Sided
+        SettingsCategory.Miscellaneous -> MaterialShapes.Cookie12Sided
     }.toShape()
     ShapedIcon(shape, category.icon, index)
 }

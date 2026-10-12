@@ -18,6 +18,7 @@ object SettingsCatalog {
             SettingsCategory.Controls to controls(),
             SettingsCategory.System to system(),
             SettingsCategory.Advanced to advanced(),
+            SettingsCategory.Miscellaneous to miscellaneous(),
         )
     }
 
@@ -267,6 +268,25 @@ object SettingsCatalog {
                 ),
             ),
             advanced = true,
+        ),
+    )
+
+    private fun miscellaneous() = listOf(
+        SettingsSection(
+            R.string.settings_section_gemini,
+            listOf(
+                Toggle("gemini.enabled", R.string.settings_gemini_enabled, R.string.settings_gemini_enabled_summary),
+                GeminiApiKeySetting,
+                Toggle(
+                    "gemini.memosVisible", R.string.settings_gemini_memos, R.string.settings_gemini_memos_summary,
+                    enabledWhen = { it.boolean("gemini.enabled") },
+                ),
+                GeminiModelSetting,
+                TextInput(
+                    "gemini.systemPrompt", R.string.settings_gemini_prompt, R.string.settings_gemini_prompt_summary,
+                    multiline = true, enabledWhen = { it.boolean("gemini.enabled") },
+                ),
+            ),
         ),
     )
 

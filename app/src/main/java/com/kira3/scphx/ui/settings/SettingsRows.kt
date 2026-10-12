@@ -1,6 +1,7 @@
 package com.kira3.scphx.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -43,6 +44,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.annotation.StringRes
+import com.kira3.scphx.ScphxApplication
+import com.kira3.scphx.data.GeminiApi
+import com.kira3.scphx.data.GeminiError
+import com.kira3.scphx.data.GeminiModel
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -98,6 +108,9 @@ fun SettingRow(
         is Choice -> if (setting.inline) InlineChoiceRow(row, setting, actions) else DialogChoiceRow(row, setting, actions)
         is Slider -> SliderRow(row, setting, actions)
         is NumberInput -> NumberRow(row, setting, actions)
+        is TextInput -> TextRow(row, setting, actions)
+        GeminiApiKeySetting -> GeminiKeyRow(row)
+        GeminiModelSetting -> GeminiModelRow(row, actions)
         PresetSetting -> PresetRow(row, actions)
         GameBiosSetting -> DialogChoiceRow(row, biosChoice(state), actions)
         GpuDriverSetting -> GpuDriverRow(row, state, actions)
@@ -480,6 +493,214 @@ private fun NumberDialog(setting: NumberInput, initial: String, onConfirm: (Numb
                 onClick = { parsed?.let { onConfirm(if (setting.decimal) it.toFloat() else it.toInt()) } },
                 enabled = parsed != null,
             ) { Text(stringResource(R.string.settings_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun TextRow(row: RowParams, setting: TextInput, actions: SettingsActions) {
+    val path = setting.path!!
+    val current = row.values.string(path)
+    var open by rememberSaveable { mutableStateOf(false) }
+    SegmentedListItem(
+        onClick = { open = true },
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        enabled = row.enabled,
+        overlineContent = row.overline,
+        supportingContent = {
+            Supporting(setting, value = current.ifEmpty { stringResource(R.string.settings_text_empty) }, showSummary = false)
+        },
+    ) { Text(stringResource(setting.title)) }
+
+    if (open) {
+        TextDialog(
+            title = setting.title,
+            summary = setting.summary,
+            initial = current,
+            multiline = setting.multiline,
+            allowEmpty = setting.allowEmpty,
+            hidden = false,
+            onConfirm = {
+                open = false
+                actions.set(path, it)
+            },
+            onDismiss = { open = false },
+        )
+    }
+}
+
+@Composable
+private fun GeminiKeyRow(row: RowParams) {
+    val store = (LocalContext.current.applicationContext as ScphxApplication).container.geminiKeyStore
+    var isSet by remember { mutableStateOf(store.isSet()) }
+    var open by rememberSaveable { mutableStateOf(false) }
+    SegmentedListItem(
+        onClick = { open = true },
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        enabled = row.enabled,
+        supportingContent = {
+            Supporting(
+                GeminiApiKeySetting,
+                value = stringResource(if (isSet) R.string.settings_gemini_key_set else R.string.settings_gemini_key_unset),
+                showSummary = false,
+            )
+        },
+    ) { Text(stringResource(GeminiApiKeySetting.title)) }
+
+    if (open) {
+        TextDialog(
+            title = GeminiApiKeySetting.title,
+            summary = GeminiApiKeySetting.summary,
+            initial = "",
+            multiline = false,
+            allowEmpty = true,
+            hidden = true,
+            onConfirm = {
+                open = false
+                store.set(it)
+                isSet = store.isSet()
+            },
+            onDismiss = { open = false },
+        )
+    }
+}
+
+@Composable
+private fun GeminiModelRow(row: RowParams, actions: SettingsActions) {
+    val path = GeminiModelSetting.path!!
+    val current = row.values.string(path)
+    var open by rememberSaveable { mutableStateOf(false) }
+    SegmentedListItem(
+        onClick = { open = true },
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        enabled = row.enabled,
+        overlineContent = row.overline,
+        supportingContent = { Supporting(GeminiModelSetting, value = current, showSummary = false) },
+    ) { Text(stringResource(GeminiModelSetting.title)) }
+
+    if (open) {
+        GeminiModelDialog(
+            current = current,
+            onSelect = {
+                open = false
+                actions.set(path, it)
+            },
+            onDismiss = { open = false },
+        )
+    }
+}
+
+/** Fetches the models the stored key can use each time it opens, so the list is never out of date. */
+@Composable
+private fun GeminiModelDialog(current: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    val store = (LocalContext.current.applicationContext as ScphxApplication).container.geminiKeyStore
+    var attempt by remember { mutableStateOf(0) }
+    var result by remember { mutableStateOf<Result<List<GeminiModel>>?>(null) }
+    LaunchedEffect(attempt) {
+        result = null
+        result = GeminiApi.listModels(store.get())
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(GeminiModelSetting.title)) },
+        text = {
+            val models = result?.getOrNull()
+            val error = result?.exceptionOrNull()
+            when {
+                result == null -> Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                error != null -> Text(
+                    when (error) {
+                        is GeminiError.NoKey -> stringResource(R.string.settings_gemini_models_no_key)
+                        is GeminiError.Rejected -> stringResource(R.string.settings_gemini_models_rejected, error.message.orEmpty())
+                        else -> stringResource(R.string.settings_gemini_models_network)
+                    },
+                )
+                models != null -> LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    // The stored model stays selectable even if the list does not include it.
+                    val all = if (models.any { it.id == current }) models else listOf(GeminiModel(current, current)) + models
+                    items(all, key = { it.id }) { model ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .selectable(selected = model.id == current, role = Role.RadioButton) { onSelect(model.id) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = model.id == current, onClick = null)
+                            Column(Modifier.padding(start = 16.dp)) {
+                                Text(model.displayName)
+                                if (model.displayName != model.id) {
+                                    Text(model.id, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (result?.isFailure == true && result?.exceptionOrNull() !is GeminiError.NoKey) {
+                TextButton(onClick = { attempt++ }) { Text(stringResource(R.string.settings_retry)) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun TextDialog(
+    @StringRes title: Int,
+    @StringRes summary: Int,
+    initial: String,
+    multiline: Boolean,
+    allowEmpty: Boolean,
+    hidden: Boolean,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by rememberSaveable { mutableStateOf(initial) }
+    val valid = allowEmpty || text.isNotBlank()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(title)) },
+        text = {
+            Column {
+                if (summary != 0) {
+                    Text(stringResource(summary), modifier = Modifier.padding(bottom = 12.dp))
+                }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = !multiline,
+                    minLines = if (multiline) 3 else 1,
+                    maxLines = if (multiline) 8 else 1,
+                    isError = !valid,
+                    visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
+                    keyboardOptions = if (hidden) {
+                        KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
+                    } else {
+                        KeyboardOptions.Default
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text.trim()) }, enabled = valid) {
+                Text(stringResource(R.string.settings_ok))
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }

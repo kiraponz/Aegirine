@@ -51,9 +51,12 @@ import com.kira3.scphx.emucore.VmState
 import com.kira3.scphx.emulation.input.ControllerRumble
 import com.kira3.scphx.emulation.input.GamepadInput
 import com.kira3.scphx.emulation.input.PadSink
+import com.kira3.scphx.data.GeminiApi
+import com.kira3.scphx.data.GeminiError
 import com.kira3.scphx.emulation.macro.MacroPlayer
 import com.kira3.scphx.emulation.macro.MacroRecorder
 import com.kira3.scphx.data.macro.Macro
+import com.kira3.scphx.data.memo.Memo
 import com.kira3.scphx.emulation.input.TouchPad
 import com.kira3.scphx.emulation.input.gameAspectOf
 import com.kira3.scphx.emucore.settings.EmulatorSettings
@@ -153,13 +156,20 @@ class EmulationActivity : ComponentActivity() {
     private val macroRecorder by lazy { MacroRecorder(core, PORT) }
     private val macroPlayer by lazy { MacroPlayer(core, PORT, lifecycleScope) }
     private var macroList by mutableStateOf<List<Macro>>(emptyList())
+    private var memoList by mutableStateOf<List<Memo>>(emptyList())
     private var macrosOpen by mutableStateOf(false)
 
     /** Seconds the running recording has gone on, or -1 when none is. */
     private var recordingSeconds by mutableLongStateOf(-1L)
     private var recordingJob: Job? = null
 
-    private val overlayOpen get() = menuOpen || rewindOpen || cheatsOpen || macrosOpen
+    // ---- Gemini ----
+    private var aiShot by mutableStateOf<AiShot?>(null)
+    private var aiState by mutableStateOf<AiState>(AiState.Idle)
+    private var aiBusy = false
+    private var aiJob: Job? = null
+
+    private val overlayOpen get() = menuOpen || rewindOpen || cheatsOpen || macrosOpen || aiShot != null
 
     /** Waits for the game's CRC, then gives the core its cheats. */
     private var cheatsJob: Job? = null
@@ -198,6 +208,7 @@ class EmulationActivity : ComponentActivity() {
                 rewindOpen -> if (!stateBusy) closeRewind()
                 cheatsOpen -> closeCheats()
                 macrosOpen -> closeMacros()
+                aiShot != null -> closeAi()
                 recordingSeconds >= 0 -> stopRecording()
                 core.hasActiveVm -> openMenu()
                 // Still booting, or the boot failed: nothing to pause.
@@ -259,7 +270,15 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
+                        aiButton = if (settings?.gemini?.enabled == true) {
+                            { AiButton(onClick = ::openAi) }
+                        } else {
+                            null
+                        },
                     )
+                    if (serial != null && settings?.gemini?.memosVisible == true && memoList.isNotEmpty()) {
+                        MemoOverlay(memoList, memoActions)
+                    }
                     val playingMacro by macroPlayer.playing.collectAsState()
                     if (recordingSeconds >= 0) {
                         MacroStatus(
@@ -284,6 +303,9 @@ class EmulationActivity : ComponentActivity() {
                     if (macrosOpen) {
                         MacrosMenu(macroList, macroActions, ::closeMacros)
                     }
+                    aiShot?.let { shot ->
+                        AiPanel(shot, aiState, ::askGemini, if (serial != null) ::saveMemo else null, ::closeAi)
+                    }
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
                     }
@@ -293,6 +315,7 @@ class EmulationActivity : ComponentActivity() {
 
         serial?.let { serial ->
             lifecycleScope.launch { container.macroRepository.macros(serial).collect { macroList = it } }
+            lifecycleScope.launch { container.memoRepository.memos(serial).collect { memoList = it } }
         }
         lifecycleScope.launch { boot(gameUri) }
     }
@@ -647,6 +670,103 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Captures the screen while the game still runs, then pauses it and opens the question panel.
+     * The frame is kept in memory only: the temporary file is deleted at once.
+     */
+    private fun openAi() {
+        if (overlayOpen || aiBusy || recordingSeconds >= 0) return
+        if (container.geminiKeyStore.get().isEmpty()) {
+            showMessage(getString(R.string.ai_no_key))
+            return
+        }
+        aiBusy = true
+        gamepad.releaseAll()
+        lifecycleScope.launch {
+            val shot = screenshots.captureTemporary()?.let { png ->
+                withContext(Dispatchers.IO) { prepareAiShot(png).also { png.delete() } }
+            }
+            aiBusy = false
+            if (shot == null) {
+                showMessage(getString(R.string.ai_capture_failed))
+                return@launch
+            }
+            if (core.vmState.value == VmState.Running) {
+                core.pause()
+                pausedByMenu = true
+            }
+            aiState = AiState.Idle
+            aiShot = shot
+        }
+    }
+
+    private fun closeAi() {
+        aiJob?.cancel()
+        aiShot = null
+        aiState = AiState.Idle
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    private fun askGemini(question: String) {
+        val shot = aiShot ?: return
+        val gemini = settings?.gemini ?: return
+        aiState = AiState.Loading
+        aiJob?.cancel()
+        aiJob = lifecycleScope.launch {
+            val result = GeminiApi.ask(container.geminiKeyStore.get(), gemini.model, gemini.systemPrompt, shot.jpeg, question)
+            aiState = result.fold(
+                onSuccess = { AiState.Answer(it) },
+                onFailure = {
+                    AiState.Error(
+                        when (it) {
+                            is GeminiError.NoKey -> getString(R.string.ai_no_key)
+                            is GeminiError.Rejected -> getString(R.string.ai_error_rejected, it.message.orEmpty())
+                            is GeminiError.Empty -> getString(R.string.ai_error_empty, it.message.orEmpty())
+                            else -> getString(R.string.ai_error_network)
+                        },
+                    )
+                },
+            )
+        }
+    }
+
+    /** Keeps an answer as a memo, a little lower than the last one so they do not pile up. */
+    private fun saveMemo(question: String, answer: String) {
+        val serial = serial ?: return
+        lifecycleScope.launch {
+            container.memoRepository.update(serial) { memos ->
+                val step = memos.size % MEMO_CASCADE
+                memos + Memo(
+                    id = UUID.randomUUID().toString(),
+                    question = question,
+                    text = answer,
+                    x = 0.04f + 0.03f * step,
+                    y = 0.08f + 0.06f * step,
+                    createdAt = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    private val memoActions = object : MemoActions {
+        override fun move(memo: Memo, x: Float, y: Float) = change(memo) { it.copy(x = x, y = y) }
+        override fun setCollapsed(memo: Memo, collapsed: Boolean) = change(memo) { it.copy(collapsed = collapsed) }
+        override fun delete(memo: Memo) {
+            val serial = serial ?: return
+            lifecycleScope.launch { container.memoRepository.update(serial) { list -> list.filter { it.id != memo.id } } }
+        }
+
+        private fun change(memo: Memo, transform: (Memo) -> Memo) {
+            val serial = serial ?: return
+            lifecycleScope.launch {
+                container.memoRepository.update(serial) { list -> list.map { if (it.id == memo.id) transform(it) else it } }
+            }
+        }
+    }
+
     private fun showMacros() {
         macrosOpen = true
     }
@@ -791,6 +911,10 @@ class EmulationActivity : ComponentActivity() {
             // The game stays paused (by the menu) while the macros are up.
             menuOpen = false
             showMacros()
+        }
+
+        override fun setShowMemos(show: Boolean) = updateSetting("gemini.memosVisible") {
+            it.copy(gemini = it.gemini.copy(memosVisible = show))
         }
 
         override fun setMacroButton(show: Boolean) = updateSetting("frameLimit.macroButton") {
@@ -1084,6 +1208,9 @@ class EmulationActivity : ComponentActivity() {
         private const val VM_POLL_MS = 200L
         private const val CHEATS_POLL_MS = 500L
         private const val RECORDING_TICK_MS = 250L
+
+        /** Memos saved one after the other are offset in this many steps before starting over. */
+        private const val MEMO_CASCADE = 6
         private const val SUSPEND_SAVE_TRIES = 10
         private const val SUSPEND_SAVE_RETRY_MS = 250L
         private const val TOAST_VISIBLE_MS = 3_500L

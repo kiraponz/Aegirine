@@ -22,7 +22,8 @@ enum class SettingsCategory(
     Audio(R.string.settings_audio, R.string.settings_audio_summary, R.drawable.ic_volume_up),
     Controls(R.string.settings_controls, R.string.settings_controls_summary, R.drawable.ic_gamepad),
     System(R.string.settings_system, R.string.settings_system_summary, R.drawable.ic_memory),
-    Advanced(R.string.settings_advanced, R.string.settings_advanced_summary, R.drawable.ic_build);
+    Advanced(R.string.settings_advanced, R.string.settings_advanced_summary, R.drawable.ic_build),
+    Miscellaneous(R.string.settings_misc, R.string.settings_misc_summary, R.drawable.ic_tune);
 
     val sections: List<SettingsSection> get() = SettingsCatalog.sections(this)
 
@@ -114,6 +115,29 @@ class NumberInput(
     visibleWhen: ((SettingsValues) -> Boolean)? = null,
     enabledWhen: ((SettingsValues) -> Boolean)? = null,
 ) : Setting(path, title, summary, visibleWhen, enabledWhen)
+
+/** Text typed into a dialog. [multiline] is for long text such as a prompt. */
+class TextInput(
+    path: String,
+    @StringRes title: Int,
+    @StringRes summary: Int = 0,
+    val multiline: Boolean = false,
+    val allowEmpty: Boolean = true,
+    visibleWhen: ((SettingsValues) -> Boolean)? = null,
+    enabledWhen: ((SettingsValues) -> Boolean)? = null,
+) : Setting(path, title, summary, visibleWhen, enabledWhen)
+
+/** The Gemini API key, typed in a dialog and kept apart from the settings files. */
+data object GeminiApiKeySetting : Setting(
+    null, R.string.settings_gemini_key, R.string.settings_gemini_key_summary, null,
+    enabledWhen = { it.boolean("gemini.enabled") }, globalOnly = true,
+)
+
+/** The Gemini model, chosen from the models the API key can use, fetched when the dialog opens. */
+data object GeminiModelSetting : Setting(
+    "gemini.model", R.string.settings_gemini_model, R.string.settings_gemini_model_summary, null,
+    enabledWhen = { it.boolean("gemini.enabled") },
+)
 
 /** The performance presets, which rewrite several settings at once. */
 data object PresetSetting : Setting(null, R.string.settings_preset, R.string.settings_preset_summary, null, null)

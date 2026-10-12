@@ -78,6 +78,7 @@ fun TouchPad(
     rewindButton: (@Composable () -> Unit)? = null,
     screenshotButton: (@Composable () -> Unit)? = null,
     macroButton: (@Composable () -> Unit)? = null,
+    aiButton: (@Composable () -> Unit)? = null,
     floatingSticks: Boolean = false,
     gameAspect: Float? = null,
     opacity: Float = 1f,
@@ -152,6 +153,9 @@ fun TouchPad(
         }
         if (macroButton != null) {
             Box(Modifier.centeredAt(layout.macro)) { macroButton() }
+        }
+        if (aiButton != null) {
+            Box(Modifier.centeredAt(layout.ai)) { aiButton() }
         }
     }
 }
