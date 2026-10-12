@@ -142,6 +142,8 @@ val syncArmsx2Resources = tasks.register<SyncFromArmsx2>("syncArmsx2Resources") 
     )
     // ARMSX2's mobile GameDB fixes, read next to GameIndex.yaml.
     extraFiles.from(File(armsx2Dir, "bin/resources-overlay/armsx2_overrides.yaml"))
+    // The built-in game patches (pcsx2_patches), which ARMSX2 keeps only in its Android app.
+    extraFiles.from(File(armsx2Dir, "platforms/android/app/src/main/assets/resources/patches.zip"))
     intoPath.set("resources")
     outputDir.set(layout.buildDirectory.dir("generated/armsx2/assets"))
 }

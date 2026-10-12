@@ -197,13 +197,38 @@ class EmulatorCore(context: Context) {
     // ---- Input ----
     // Call these directly from input handlers, not through a ViewModel, to keep latency low.
 
-    /** Presses or releases a pad button on [port] (0 = player 1). [range] is 0..255 for analog inputs. */
-    fun setPadButton(port: Int, button: Int, range: Int, pressed: Boolean) =
-        NativeApp.setPadButtonForPort(port, button, range, pressed)
+    /**
+     * Presses or releases [button] on [port] (0 = player 1). [pressure] (0..1) is how hard a
+     * pressed button is pushed, for the games that read button pressure (or an analog trigger).
+     */
+    fun setPadButton(port: Int, button: PadButton, pressed: Boolean, pressure: Float = 1f) {
+        val range = if (pressed) pressureToRange(pressure) else 0
+        NativeApp.setPadButtonForPort(port, button.code, range, pressed && range > 0)
+    }
 
-    fun setPadVibration(enabled: Boolean) = NativeApp.setPadVibration(enabled)
+    /**
+     * Moves [stick] on [port] to ([x], [y]), each -1..1 with +x right and +y down. Shape the
+     * input (deadzone) before calling; this sends it as is.
+     */
+    fun setPadStick(port: Int, stick: PadStick, x: Float, y: Float) {
+        // The core takes each direction as its own half-axis.
+        setHalfAxis(port, stick.right, x)
+        setHalfAxis(port, stick.left, -x)
+        setHalfAxis(port, stick.down, y)
+        setHalfAxis(port, stick.up, -y)
+    }
+
+    private fun setHalfAxis(port: Int, code: Int, value: Float) {
+        val range = if (value > 0f) pressureToRange(value) else 0
+        NativeApp.setPadButtonForPort(port, code, range, range > 0)
+    }
+
+    /** The core reads 1..32767 as a 0..1 magnitude (0 would mean "fully pressed"). */
+    private fun pressureToRange(value: Float): Int =
+        (value.coerceIn(0f, 1f) * PAD_RANGE_MAX).toInt()
 
     private companion object {
         const val TAG = "EmulatorCore"
+        const val PAD_RANGE_MAX = 32767
     }
 }

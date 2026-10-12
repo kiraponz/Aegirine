@@ -6,6 +6,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
@@ -14,7 +17,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
@@ -26,7 +33,13 @@ import androidx.lifecycle.lifecycleScope
 import com.kira3.scphx.R
 import com.kira3.scphx.ScphxApplication
 import com.kira3.scphx.emucore.EmulatorCore
+import com.kira3.scphx.emucore.PadButton
+import com.kira3.scphx.emucore.PadStick
 import com.kira3.scphx.emucore.VmState
+import com.kira3.scphx.emulation.input.ControllerRumble
+import com.kira3.scphx.emulation.input.GamepadInput
+import com.kira3.scphx.emulation.input.PadSink
+import com.kira3.scphx.emulation.input.TouchPad
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.concurrent.thread
@@ -47,6 +60,22 @@ class EmulationActivity : ComponentActivity() {
     /** True when onStop paused the VM, so onStart knows to resume it. */
     private var pausedWhileHidden = false
 
+    // Input goes straight to the core from the input callbacks, not through a ViewModel.
+    private val gamepad by lazy { GamepadInput(core) }
+    private val rumble by lazy { ControllerRumble { gamepad.lastDeviceId } }
+    private val touchSink by lazy {
+        object : PadSink {
+            override fun onButton(button: PadButton, pressed: Boolean) =
+                core.setPadButton(PORT, button, pressed)
+
+            override fun onStick(stick: PadStick, x: Float, y: Float) =
+                core.setPadStick(PORT, stick, x, y)
+        }
+    }
+
+    /** The touch pad hides while a controller is in use and comes back on a touch. */
+    private var touchPadVisible by mutableStateOf(true)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val gameUri = IntentCompat.getParcelableExtra(intent, EXTRA_GAME_URI, Uri::class.java)
@@ -60,15 +89,24 @@ class EmulationActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this) { exit() }
 
+        touchPadVisible = !isControllerConnected()
+        gamepad.onControllerUsed = { touchPadVisible = false }
+        core.rumbleHandler = { pad, large, small -> if (pad == PORT) rumble.rumble(large, small) }
+
         setContent {
-            AndroidView(
-                factory = { context ->
-                    SurfaceView(context).apply { holder.addCallback(surfaceCallback) }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-            )
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AndroidView(
+                    factory = { context ->
+                        SurfaceView(context).apply { holder.addCallback(surfaceCallback) }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                TouchPad(
+                    sink = touchSink,
+                    visible = touchPadVisible,
+                    onShowRequest = { touchPadVisible = true },
+                )
+            }
         }
 
         lifecycleScope.launch { boot(gameUri) }
@@ -132,8 +170,22 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        gamepad.onKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        gamepad.onMotionEvent(event) || super.dispatchGenericMotionEvent(event)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Key-up events go to whatever has focus, so a button held while focus leaves would
+        // stay pressed.
+        if (!hasFocus) gamepad.releaseAll()
+    }
+
     override fun onStop() {
         super.onStop()
+        rumble.stop()
         if (emulationThread == null) return
         if (core.vmState.value == VmState.Running) {
             core.pause()
@@ -144,6 +196,7 @@ class EmulationActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        core.rumbleHandler = null
         // configChanges keeps rotation from recreating this activity, so being destroyed
         // means the game is over.
         if (emulationThread != null && core.hasActiveVm) core.shutdown()
@@ -173,6 +226,11 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    private fun isControllerConnected(): Boolean = InputDevice.getDeviceIds().any { id ->
+        val device = InputDevice.getDevice(id) ?: return@any false
+        !device.isVirtual && device.supportsSource(InputDevice.SOURCE_GAMEPAD)
+    }
+
     private fun displayRefreshRate(): Float? {
         val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             display
@@ -185,6 +243,9 @@ class EmulationActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "EmulationActivity"
+
+        /** Player 1. Both the touch pad and controllers play as player 1 for now. */
+        private const val PORT = 0
         private const val EXTRA_GAME_URI = "com.kira3.scphx.extra.GAME_URI"
         private const val EXTRA_SERIAL = "com.kira3.scphx.extra.SERIAL"
 
