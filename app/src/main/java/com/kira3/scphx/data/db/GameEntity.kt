@@ -15,4 +15,6 @@ data class GameEntity(
     val serial: String? = null,
     /** False until the core has tried to read [serial]. */
     val serialRead: Boolean = false,
+    /** The GameDB name for [serial]. Null when the database doesn't know the game. */
+    val dbTitle: String? = null,
 )

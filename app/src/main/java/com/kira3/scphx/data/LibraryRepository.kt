@@ -26,9 +26,11 @@ data class Game(
     /** Whether the core has already tried to read [serial]. */
     val serialRead: Boolean,
     val sizeBytes: Long,
+    /** The GameDB name for [serial], if the database knows the game. */
+    val dbTitle: String? = null,
 ) {
-    /** The file name without its extension. */
-    val title: String get() = fileName.substringBeforeLast('.')
+    /** The GameDB name, or the file name without its extension. */
+    val title: String get() = dbTitle ?: fileName.substringBeforeLast('.')
 
     /** Upper-case extension, e.g. "CHD". */
     val format: String get() = fileName.substringAfterLast('.', "").uppercase()
@@ -105,11 +107,12 @@ class LibraryRepository(
      */
     suspend fun readSerial(game: Game): String? {
         if (game.serialRead) return game.serial
-        val serial = withContext(Dispatchers.IO) {
+        val (serial, dbTitle) = withContext(Dispatchers.IO) {
             core.initialize()
-            core.readGameSerial(game.uri)
+            val serial = core.readGameSerial(game.uri)
+            serial to serial?.let { core.gameDbTitle(it) }
         }
-        dao.setSerial(game.uri.toString(), serial)
+        dao.setSerial(game.uri.toString(), serial, dbTitle)
         return serial
     }
 
@@ -147,6 +150,7 @@ class LibraryRepository(
         serial = serial,
         serialRead = serialRead,
         sizeBytes = sizeBytes,
+        dbTitle = dbTitle,
     )
 
     private companion object {

@@ -280,6 +280,12 @@ class EmulatorCore(context: Context) {
         return tagged.substringAfter(':').takeIf { platform == "ps2" && it.isNotEmpty() }
     }
 
+    /** The GameDB's English name for [serial], or null when the database doesn't know it. */
+    fun gameDbTitle(serial: String): String? {
+        val names = NativeApp.getTitlesForSerial(serial).split('\n')
+        return names.getOrNull(2)?.takeIf { it.isNotBlank() } ?: names.firstOrNull()?.takeIf { it.isNotBlank() }
+    }
+
     /** Opens [uri] and detaches the fd; the core takes ownership and closes it. */
     private fun openFd(uri: Uri): Int? = try {
         appContext.contentResolver.openFileDescriptor(uri, "r")?.detachFd()
