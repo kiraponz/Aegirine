@@ -303,9 +303,7 @@ class EmulationActivity : ComponentActivity() {
                     if (macrosOpen) {
                         MacrosMenu(macroList, macroActions, ::closeMacros)
                     }
-                    aiShot?.let { shot ->
-                        AiPanel(shot, aiState, ::askGemini, if (serial != null) ::saveMemo else null, ::closeAi)
-                    }
+                    AiPanelHost(aiShot, aiState, ::askGemini, if (serial != null) ::saveMemo else null, ::closeAi)
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
                     }

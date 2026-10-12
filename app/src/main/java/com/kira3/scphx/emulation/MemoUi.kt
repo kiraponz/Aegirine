@@ -80,8 +80,10 @@ private fun MemoCard(memo: Memo, areaWidth: Float, areaHeight: Float, actions: M
     )
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 6.dp,
+        // Translucent so the game shows through; the content colour is set outright because
+        // a translucent surface colour would make contentColorFor pick an unreadable one.
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .offset { IntOffset(clamped.x.roundToInt(), clamped.y.roundToInt()) }
             .width(CARD_WIDTH)

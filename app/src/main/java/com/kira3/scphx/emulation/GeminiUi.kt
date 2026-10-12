@@ -38,6 +38,28 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import android.graphics.Matrix
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -51,6 +73,45 @@ import androidx.compose.ui.unit.dp
 import com.kira3.scphx.R
 import java.io.ByteArrayOutputStream
 import java.io.File
+
+private val RainbowColors = listOf(
+    Color(0xFFFF5C8A), Color(0xFFFFB347), Color(0xFFF7F75E), Color(0xFF5CF08A),
+    Color(0xFF4FD8FF), Color(0xFF8A7CFF), Color(0xFFFF5CF0), Color(0xFFFF5C8A),
+)
+
+/** A slowly turning rainbow edge with a soft glow around it. */
+private fun Modifier.rainbowAura(shape: Shape): Modifier = composed {
+    val angle by rememberInfiniteTransition(label = "aura").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(6000, easing = LinearEasing)),
+        label = "auraAngle",
+    )
+    drawBehind {
+        val outline = shape.createOutline(size, layoutDirection, this) as? Outline.Rounded ?: return@drawBehind
+        val path = Path().apply { addRoundRect(outline.roundRect) }.asAndroidPath()
+        val shader = android.graphics.SweepGradient(
+            size.width / 2, size.height / 2,
+            RainbowColors.map { it.toArgb() }.toIntArray(), null,
+        ).apply { setLocalMatrix(Matrix().apply { setRotate(angle, size.width / 2, size.height / 2) }) }
+        // A real blur for the glow (stacked strokes show their corners); the thin line stays sharp.
+        for ((width, blur, alpha) in listOf(
+            Triple(14.dp, 24.dp, 0.9f),
+            Triple(7.dp, 10.dp, 0.9f),
+            Triple(1.5.dp, 0.dp, 0.95f),
+        )) {
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                style = android.graphics.Paint.Style.STROKE
+                strokeJoin = android.graphics.Paint.Join.ROUND
+                strokeWidth = width.toPx()
+                this.shader = shader
+                this.alpha = (alpha * 255).toInt()
+                if (blur > 0.dp) maskFilter = android.graphics.BlurMaskFilter(blur.toPx(), android.graphics.BlurMaskFilter.Blur.NORMAL)
+            }
+            drawContext.canvas.nativeCanvas.drawPath(path, paint)
+        }
+    }
+}
 
 /** A frame ready to send: [jpeg] for the API, [preview] for the panel. */
 class AiShot(val jpeg: ByteArray, val preview: ImageBitmap)
@@ -102,6 +163,40 @@ fun AiButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 /** The screen as it was when the button was pressed, a question box, and the answer once it arrives. The game stays paused. */
+/**
+ * The panel for [shot] (null = closed). It fades in and floats up when opened, and floats back
+ * down while fading out when closed; during the fade-out it ignores touches.
+ */
+@Composable
+fun AiPanelHost(
+    shot: AiShot?,
+    state: AiState,
+    onAsk: (String) -> Unit,
+    onSaveMemo: ((question: String, answer: String) -> Unit)?,
+    onClose: () -> Unit,
+) {
+    val appear = remember { Animatable(0f) }
+    var last by remember { mutableStateOf<AiShot?>(null) }
+    var lastState by remember { mutableStateOf<AiState>(AiState.Idle) }
+    if (shot != null) {
+        last = shot
+        lastState = state
+    }
+    LaunchedEffect(shot != null) {
+        appear.animateTo(if (shot != null) 1f else 0f, tween(450, easing = FastOutSlowInEasing))
+        if (shot == null) last = null
+    }
+    val showing = last ?: return
+    val open = shot != null
+    AiPanel(
+        showing, lastState,
+        onAsk = { if (open) onAsk(it) },
+        onSaveMemo = if (open) onSaveMemo else null,
+        onClose = { if (open) onClose() },
+        appear = appear.value,
+    )
+}
+
 @Composable
 fun AiPanel(
     shot: AiShot,
@@ -110,6 +205,8 @@ fun AiPanel(
     /** Null when there is nowhere to keep a memo (no game id). */
     onSaveMemo: ((question: String, answer: String) -> Unit)?,
     onClose: () -> Unit,
+    /** 0 (hidden) to 1 (fully shown); drives the fade and float. */
+    appear: Float,
 ) {
     var savedAnswer by rememberSaveable { mutableStateOf<String?>(null) }
     var question by rememberSaveable { mutableStateOf("") }
@@ -117,7 +214,7 @@ fun AiPanel(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
+            .background(Color.Black.copy(alpha = 0.6f * appear))
             .clickable(interactionSource = null, indication = null, onClick = onClose)
             .safeDrawingPadding()
             .imePadding()
@@ -126,8 +223,23 @@ fun AiPanel(
     ) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().clickable(interactionSource = null, indication = null) {},
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .fillMaxWidth()
+                .graphicsLayer {
+                    // Without this the fading panel is flattened into a layer clipped to its bounds,
+                    // which cuts the glow off into hard corners.
+                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                    alpha = appear
+                    val scale = 0.92f + 0.08f * appear
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = (1f - appear) * 24.dp.toPx()
+                }
+                .rainbowAura(MaterialTheme.shapes.extraLarge)
+                .clickable(interactionSource = null, indication = null) {},
         ) {
             Column(Modifier.padding(vertical = 16.dp)) {
                 Row(
