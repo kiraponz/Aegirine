@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -75,6 +76,7 @@ fun SettingsHomeScreen(
     gameTitle: String?,
     selected: SettingsCategory?,
     onOpenCategory: (SettingsCategory) -> Unit,
+    onOpenSearch: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(serial)),
 ) {
@@ -92,6 +94,9 @@ fun SettingsHomeScreen(
                 subtitle = if (isGame) ({ Text(stringResource(R.string.settings_game_subtitle)) }) else null,
                 navigationIcon = { BackButton(onBack) },
                 actions = {
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.settings_search))
+                    }
                     if (state?.overrides?.isNotEmpty() == true) {
                         IconButton(onClick = { confirmReset = true }) {
                             Icon(

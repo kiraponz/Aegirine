@@ -102,6 +102,13 @@
     <string name="settings_reset_game_confirm">Every setting this game changes goes back to the global value.</string>
     <string name="settings_reset_category">Use global settings for this category</string>
     <string name="settings_reset_category_confirm">Every %1$s setting this game changes goes back to the global value.</string>
+    <string name="settings_search">Search settings</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_game_hint">Search this game\'s settings</string>
+    <string name="settings_search_clear">Clear</string>
+    <string name="settings_search_prompt">Search by name or description</string>
+    <string name="settings_search_empty">No matching settings</string>
+    <string name="settings_search_group">%1$s · %2$s</string>
     <string name="settings_cancel">Cancel</string>
     <string name="settings_ok">OK</string>
     <string name="settings_number_range">From %1$s to %2$s</string>

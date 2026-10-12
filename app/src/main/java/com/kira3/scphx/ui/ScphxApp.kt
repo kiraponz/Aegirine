@@ -19,6 +19,7 @@ import com.kira3.scphx.ui.settings.GpuDriverScreen
 import com.kira3.scphx.ui.settings.SettingsCategoryScreen
 import com.kira3.scphx.ui.settings.SettingsDetailPlaceholder
 import com.kira3.scphx.ui.settings.SettingsHomeScreen
+import com.kira3.scphx.ui.settings.SettingsSearchScreen
 
 /**
  * Root of MainActivity's UI. The back stack is a plain list the app owns (Navigation 3).
@@ -29,6 +30,15 @@ import com.kira3.scphx.ui.settings.SettingsHomeScreen
 fun ScphxApp() {
     val backStack = rememberNavBackStack(LibraryRoute)
     val listDetail = rememberListDetailSceneStrategy<NavKey>()
+
+    // Beside the settings list, opening something replaces what is open in the detail pane.
+    fun openDetail(route: NavKey) {
+        val last = backStack.lastOrNull()
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute) {
+            while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
+        }
+        backStack.add(route)
+    }
 
     NavDisplay(
         backStack = backStack,
@@ -62,14 +72,9 @@ fun ScphxApp() {
                     gameTitle = route.gameTitle,
                     selected = backStack.filterIsInstance<SettingsCategoryRoute>().lastOrNull()?.category,
                     onOpenCategory = { category ->
-                        val detail = SettingsCategoryRoute(category, route.serial, route.gameTitle)
-                        // Beside the list, picking another category replaces what is open there.
-                        val last = backStack.lastOrNull()
-                        if (last is SettingsCategoryRoute || last is GpuDriverRoute) {
-                            while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
-                        }
-                        backStack.add(detail)
+                        openDetail(SettingsCategoryRoute(category, route.serial, route.gameTitle))
                     },
+                    onOpenSearch = { openDetail(SettingsSearchRoute(route.serial, route.gameTitle)) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }
@@ -80,6 +85,18 @@ fun ScphxApp() {
             ) { route ->
                 SettingsCategoryScreen(
                     category = route.category,
+                    serial = route.serial,
+                    gameTitle = route.gameTitle,
+                    onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<SettingsSearchRoute>(
+                metadata = { route ->
+                    ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute(route.serial, route.gameTitle))
+                },
+            ) { route ->
+                SettingsSearchScreen(
                     serial = route.serial,
                     gameTitle = route.gameTitle,
                     onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
