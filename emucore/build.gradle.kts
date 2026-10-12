@@ -1,3 +1,5 @@
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.android.library)
 }
@@ -31,6 +33,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        consumerProguardFiles("consumer-rules.pro")
 
         ndk {
             // The core's JIT targets ARM64 only.
@@ -57,5 +60,95 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    api(libs.kotlinx.coroutines.android)
+}
+
+// Copies a slice of the ARMSX2 tree into a generated source root at build time, so the
+// files stay in step with the submodule instead of drifting as committed copies.
+abstract class SyncFromArmsx2 @Inject constructor(
+    private val fs: FileSystemOperations,
+) : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceDir: DirectoryProperty
+
+    @get:Input
+    abstract val includePatterns: ListProperty<String>
+
+    @get:Input
+    abstract val excludePatterns: ListProperty<String>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val extraFiles: ConfigurableFileCollection
+
+    /** Subfolder of [outputDir] the files land in. */
+    @get:Input
+    abstract val intoPath: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun sync() {
+        // Read everything up front: inside the CopySpec lambdas, names like `includes`
+        // would resolve to the spec's own properties.
+        val src = sourceDir.get().asFile
+        val includes = includePatterns.get()
+        val excludes = excludePatterns.get()
+        val extras = extraFiles.files
+        val subdir = intoPath.get()
+        fs.sync {
+            into(outputDir)
+            into(subdir) {
+                from(src) {
+                    include(includes)
+                    exclude(excludes)
+                }
+                from(extras)
+            }
+        }
+    }
+}
+
+// Java classes the core looks up by name over JNI. SDL's JNI_OnLoad registers natives on
+// the org.libsdl.app classes, and ContentChdFiles backs NativeApp.findSiblingChds.
+val syncArmsx2Java = tasks.register<SyncFromArmsx2>("syncArmsx2Java") {
+    sourceDir.set(File(armsx2Dir, "platforms/android/app/src/main/java"))
+    includePatterns.set(listOf("org/libsdl/app/**", "kr/co/iefriends/pcsx2/ContentChdFiles.java"))
+    excludePatterns.set(emptyList())
+    intoPath.set(".")
+    outputDir.set(layout.buildDirectory.dir("generated/armsx2/java"))
+}
+
+// Runtime resources (GameDB, shaders, fonts). EmulatorCore copies assets/resources into
+// the data folder before the core starts, because the core reads them as plain files.
+val syncArmsx2Resources = tasks.register<SyncFromArmsx2>("syncArmsx2Resources") {
+    sourceDir.set(File(armsx2Dir, "bin/resources"))
+    includePatterns.set(emptyList())
+    excludePatterns.set(
+        listOf(
+            // Direct3D shaders; Android uses OpenGL/Vulkan only.
+            "shaders/dx11/**",
+            // Desktop emoji font; nothing on Android loads it.
+            "fonts/Twemoji*",
+            // Namco System 246/256 data; arcade games are out of scope for v1.
+            "arcade/**",
+        )
+    )
+    // ARMSX2's mobile GameDB fixes, read next to GameIndex.yaml.
+    extraFiles.from(File(armsx2Dir, "bin/resources-overlay/armsx2_overrides.yaml"))
+    intoPath.set("resources")
+    outputDir.set(layout.buildDirectory.dir("generated/armsx2/assets"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.java?.addGeneratedSourceDirectory(syncArmsx2Java, SyncFromArmsx2::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(syncArmsx2Resources, SyncFromArmsx2::outputDir)
     }
 }
