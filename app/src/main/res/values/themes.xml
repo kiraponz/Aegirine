@@ -1,4 +1,9 @@
 <resources>
     <!-- Window theme only (shown until Compose draws). Colors come from ScphxTheme. -->
     <style name="Theme.Scphx" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Gameplay: black until the first frame. -->
+    <style name="Theme.Scphx.Emulation" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
 </resources>

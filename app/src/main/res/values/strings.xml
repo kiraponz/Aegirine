@@ -7,6 +7,19 @@
     <!-- Library -->
     <string name="library_title">Library</string>
     <string name="library_empty">No games yet</string>
+    <string name="library_bios">BIOS</string>
+    <string name="library_game_folder">Game folder</string>
+    <string name="library_not_selected">Not selected</string>
+    <string name="library_selected">Selected</string>
+    <string name="library_select">Select</string>
+    <string name="library_message_invalid_bios">This file is not a PS2 BIOS</string>
+    <string name="library_message_scan_failed">Could not read the game folder</string>
+    <string name="library_message_bios_required">Select a BIOS first</string>
+    <string name="library_message_core_unavailable">The emulator is not supported on this device</string>
+
+    <!-- Emulation -->
+    <string name="emulation_boot_failed">Could not start the game: %1$s</string>
+    <string name="emulation_bios_missing">Select a BIOS first</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>

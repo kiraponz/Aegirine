@@ -20,6 +20,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- configChanges: rotation, resizing and the like must not recreate this activity,
+             because the VM runs on a thread it owns. -->
+        <activity
+            android:name=".emulation.EmulationActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Scphx.Emulation" />
     </application>
 
 </manifest>

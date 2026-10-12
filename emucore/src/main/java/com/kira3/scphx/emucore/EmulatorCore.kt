@@ -105,6 +105,9 @@ class EmulatorCore(context: Context) {
     fun setSetting(section: String, key: String, value: String) =
         NativeApp.setSetting(section, key, "string", value)
 
+    /** Selects the BIOS the next boot loads: a file name inside [biosDir]. */
+    fun setBios(fileName: String) = setSetting("Filenames", "BIOS", fileName)
+
     /** Applies the settings written since the last commit to a running VM. */
     fun commitSettings() = NativeApp.commitSettings()
 
@@ -124,12 +127,15 @@ class EmulatorCore(context: Context) {
     }
 
     /**
-     * Reads the serial (e.g. "SLUS-20312") from a disc image, or null if it can't.
-     * ISO and CHD only; CSO/ZSO/GZ return null. Blocking I/O.
+     * Reads the serial (e.g. "SLUS-20312") from a PS2 disc image, or null if it can't
+     * (CSO/ZSO/GZ, unreadable images, and PS1 discs). Blocking I/O.
      */
     fun readGameSerial(uri: Uri): String? {
         val fd = openFd(uri) ?: return null
-        return NativeApp.getGameSerialFromFd(fd)?.takeIf { it.isNotEmpty() }
+        // The core tags the serial with the disc's platform: "ps2:SLUS-20312" or "ps1:...".
+        val tagged = NativeApp.getGameSerialFromFd(fd) ?: return null
+        val platform = tagged.substringBefore(':', missingDelimiterValue = "ps2")
+        return tagged.substringAfter(':').takeIf { platform == "ps2" && it.isNotEmpty() }
     }
 
     /** Opens [uri] and detaches the fd; the core takes ownership and closes it. */
@@ -152,11 +158,10 @@ class EmulatorCore(context: Context) {
         check(initialized) { "EmulatorCore.initialize() has not completed" }
         _vmState.value = VmState.Starting
         return try {
-            if (NativeApp.runVMThread(gameUri)) {
-                null
-            } else {
-                NativeApp.getLastBootError().ifEmpty { "The game could not be started" }
-            }
+            // runVMThread returns true even when the boot fails; the reason is left in
+            // getLastBootError. It returns false only when the host checks fail first.
+            val ok = NativeApp.runVMThread(gameUri)
+            NativeApp.getLastBootError().ifEmpty { if (ok) null else "The game could not be started" }
         } finally {
             _vmState.value = VmState.Stopped
         }
