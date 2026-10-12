@@ -416,6 +416,19 @@ class EmulationActivity : ComponentActivity() {
             0
         }
         core.setPortraitRenderTopInset(scaleInsetToBuffer(inset, viewHeight, bufferHeight))
+
+        // The on-screen messages are drawn over the whole surface, so keep them off the cutout on any side.
+        val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            runCatching { view.rootWindowInsets?.displayCutout }.getOrNull()
+        } else {
+            null
+        }
+        core.setOsdSafeAreaInsets(
+            scaleInsetToBuffer(cutout?.safeInsetLeft ?: 0, viewWidth, bufferWidth),
+            scaleInsetToBuffer(cutout?.safeInsetTop ?: 0, viewHeight, bufferHeight),
+            scaleInsetToBuffer(cutout?.safeInsetRight ?: 0, viewWidth, bufferWidth),
+            scaleInsetToBuffer(cutout?.safeInsetBottom ?: 0, viewHeight, bufferHeight),
+        )
     }
 
     /**

@@ -446,6 +446,10 @@ class EmulatorCore(context: Context) {
      */
     fun setPortraitRenderTopInset(pixels: Int) = NativeApp.setPortraitRenderTopInset(pixels)
 
+    /** Keeps the on-screen messages clear of the display cutout. Surface pixels. */
+    fun setOsdSafeAreaInsets(left: Int, top: Int, right: Int, bottom: Int) =
+        NativeApp.setOsdSafeAreaInsets(left, top, right, bottom)
+
     // ---- Input ----
     // Call these directly from input handlers, not through a ViewModel, to keep latency low.
 

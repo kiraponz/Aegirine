@@ -95,6 +95,7 @@ internal object NativeApp {
     @JvmStatic external fun setPortraitRenderTop(top: Boolean)
     /** Display-cutout height in surface pixels; shifts a top-aligned portrait render down. */
     @JvmStatic external fun setPortraitRenderTopInset(pixels: Int)
+    @JvmStatic external fun setOsdSafeAreaInsets(left: Int, top: Int, right: Int, bottom: Int)
     @JvmStatic external fun setLandscapeRenderTop(top: Boolean)
     /** PerformanceHintManager (ADPF) for the emulation threads. Does nothing below Android 13. */
     @JvmStatic external fun setAdpfEnabled(enabled: Boolean)

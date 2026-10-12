@@ -1,0 +1,17 @@
+--- a/platforms/android/app/src/main/cpp/native-lib.cpp
++++ b/platforms/android/app/src/main/cpp/native-lib.cpp
+@@ -1789,6 +1789,14 @@
+     // Isshin. Only the top-align path uses it, and that path always has spare room below, so the
+     // image shifts down rather than being cropped.
+     GSSetPortraitRenderTopInset(static_cast<int>(pixels));
++}
++
++extern "C"
++JNIEXPORT void JNICALL
++Java_kr_co_iefriends_pcsx2_NativeApp_setOsdSafeAreaInsets(JNIEnv*, jclass, jint left, jint top, jint right, jint bottom) {
++    // Keeps the on-screen messages (the ARMSX2 toast, FPS) clear of the display cutout. Surface pixels.
++    ImGuiManager::SetOSDSafeAreaInsets(static_cast<float>(left), static_cast<float>(top),
++                                       static_cast<float>(right), static_cast<float>(bottom));
+ }
+ 
+ extern "C"
