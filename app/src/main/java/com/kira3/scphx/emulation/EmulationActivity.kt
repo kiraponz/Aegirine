@@ -2,6 +2,7 @@ package com.kira3.scphx.emulation
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -25,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.IntentCompat
 import androidx.core.view.WindowCompat
@@ -33,6 +35,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.kira3.scphx.R
 import com.kira3.scphx.ScphxApplication
+import com.kira3.scphx.ui.theme.ScphxTheme
 import com.kira3.scphx.emucore.EmulatorCore
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
@@ -44,9 +47,11 @@ import com.kira3.scphx.emulation.input.TouchPad
 import com.kira3.scphx.emucore.settings.EmulatorSettings
 import com.kira3.scphx.emucore.settings.SettingsJson
 import com.kira3.scphx.emucore.settings.SettingsOverrides
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -82,8 +87,27 @@ class EmulationActivity : ComponentActivity() {
     /** The touch pad hides while a controller is in use and comes back on a touch. */
     private var touchPadVisible by mutableStateOf(true)
 
-    /** Shown once the game's settings are read, if they ask for it. */
-    private var fastForwardButton by mutableStateOf(false)
+    /** What the game runs with, once read. The fast-forward button and the menu show from it. */
+    private var settings by mutableStateOf<EmulatorSettings?>(null)
+
+    private var serial: String? = null
+
+    private val screenshots by lazy { Screenshots(applicationContext, core) }
+
+    // ---- In-game menu ----
+
+    private var menuOpen by mutableStateOf(false)
+
+    /** True when opening the menu paused the VM, so closing it resumes. */
+    private var pausedByMenu = false
+    private var saveSlots by mutableStateOf<List<SaveSlot>?>(null)
+    private var selectedSlot by mutableStateOf(EmulatorCore.SAVE_STATE_SLOTS.first)
+
+    /** A save or load is running. */
+    private var stateBusy by mutableStateOf(false)
+
+    /** Set by Reset: when the VM stops, boot the game again instead of finishing. */
+    private var restartRequested = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,33 +120,47 @@ class EmulationActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enterImmersiveMode()
 
-        onBackPressedDispatcher.addCallback(this) { exit() }
+        serial = intent.getStringExtra(EXTRA_SERIAL)
+        onBackPressedDispatcher.addCallback(this) {
+            when {
+                menuOpen -> if (!stateBusy) closeMenu()
+                core.hasActiveVm -> openMenu()
+                // Still booting, or the boot failed: nothing to pause.
+                else -> exit()
+            }
+        }
 
         touchPadVisible = !isControllerConnected()
         gamepad.onControllerUsed = { touchPadVisible = false }
         core.rumbleHandler = { pad, large, small -> if (pad == PORT) rumble.rumble(large, small) }
 
         setContent {
-            Box(Modifier.fillMaxSize().background(Color.Black)) {
-                AndroidView(
-                    factory = { context ->
-                        SurfaceView(context).apply { holder.addCallback(surfaceCallback) }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-                TouchPad(
-                    sink = touchSink,
-                    visible = touchPadVisible,
-                    onShowRequest = { touchPadVisible = true },
-                    fastForwardButton = if (fastForwardButton) {
-                        {
-                            val fastForward by core.fastForward.collectAsState()
-                            FastForwardButton(active = fastForward, onActiveChange = core::setFastForward)
-                        }
-                    } else {
-                        null
-                    },
-                )
+            ScphxTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    AndroidView(
+                        factory = { context ->
+                            SurfaceView(context).apply { holder.addCallback(surfaceCallback) }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    TouchPad(
+                        sink = touchSink,
+                        visible = touchPadVisible,
+                        onShowRequest = { touchPadVisible = true },
+                        fastForwardButton = if (settings?.frameLimit?.fastForwardButton == true) {
+                            {
+                                val fastForward by core.fastForward.collectAsState()
+                                FastForwardButton(active = fastForward, onActiveChange = core::setFastForward)
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                    val current = settings
+                    if (menuOpen && current != null) {
+                        InGameMenu(current, saveSlots, selectedSlot, stateBusy, menuActions)
+                    }
+                }
             }
         }
 
@@ -138,9 +176,23 @@ class EmulationActivity : ComponentActivity() {
             return
         }
 
-        // Settings are read fresh on every launch rather than shared in memory with
+        if (!startVm(gameUri)) return
+
+        // Settings changed during play (from anywhere in this process) reach the running game.
+        val settings = container.settingsRepository
+        lifecycleScope.launch {
+            settings.changes.drop(1).collect {
+                if (!core.hasActiveVm) return@collect
+                val current = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
+                apply(settings.loadGlobal(), current)
+            }
+        }
+    }
+
+    /** Reads the settings and boots the game on a new emulation thread. False if it cannot. */
+    private suspend fun startVm(gameUri: Uri): Boolean {
+        // Settings are read fresh on every boot rather than shared in memory with
         // MainActivity, so this activity can move to its own process.
-        val serial = intent.getStringExtra(EXTRA_SERIAL)
         val settings = container.settingsRepository
         val overrides = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
         val global = settings.loadGlobal()
@@ -149,37 +201,150 @@ class EmulationActivity : ComponentActivity() {
         val bios = gameBios ?: container.appPreferences.biosFileName.first()
         if (bios == null) {
             finishWithMessage(getString(R.string.emulation_bios_missing))
-            return
+            return false
         }
         core.setBios(bios)
-        apply(global, overrides, serial)
+        apply(global, overrides)
 
         Log.i(TAG, "Booting $gameUri (serial $serial)")
         emulationThread = thread(name = "Emulation") {
             val error = core.runVm(gameUri.toString())
-            runOnUiThread {
-                if (error != null) {
-                    Log.e(TAG, "Boot failed: $error")
-                    finishWithMessage(getString(R.string.emulation_boot_failed, error))
-                } else {
-                    finish()
-                }
+            runOnUiThread { onVmStopped(gameUri, error) }
+        }
+        return true
+    }
+
+    private fun onVmStopped(gameUri: Uri, error: String?) {
+        when {
+            error != null -> {
+                Log.e(TAG, "Boot failed: $error")
+                finishWithMessage(getString(R.string.emulation_boot_failed, error))
+            }
+            restartRequested && !isDestroyed -> {
+                restartRequested = false
+                lifecycleScope.launch { startVm(gameUri) }
+            }
+            else -> finish()
+        }
+    }
+
+    private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides) {
+        core.applySettings(global, overrides, serial)
+        settings = SettingsJson.merge(global, overrides)
+    }
+
+    private fun openMenu() {
+        gamepad.releaseAll()
+        if (core.vmState.value == VmState.Running) {
+            core.pause()
+            pausedByMenu = true
+        }
+        menuOpen = true
+        saveSlots = null
+        lifecycleScope.launch { saveSlots = readSaveSlots() }
+    }
+
+    private fun closeMenu() {
+        menuOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    private suspend fun readSaveSlots(): List<SaveSlot> = withContext(Dispatchers.IO) {
+        EmulatorCore.SAVE_STATE_SLOTS.map { slot ->
+            val info = core.saveStateInfo(slot)
+            val thumbnail = info?.screenshot?.let { png ->
+                BitmapFactory.decodeByteArray(png, 0, png.size)?.asImageBitmap()
+            }
+            SaveSlot(slot, info?.savedAt, thumbnail)
+        }
+    }
+
+    private val menuActions = object : InGameMenuActions {
+        override fun resume() = closeMenu()
+
+        override fun selectSlot(slot: Int) {
+            selectedSlot = slot
+        }
+
+        override fun saveState() = runStateAction(
+            action = core::saveState,
+            done = R.string.emulation_state_saved,
+            failed = R.string.emulation_state_save_failed,
+        )
+
+        override fun loadState() = runStateAction(
+            action = core::loadState,
+            done = R.string.emulation_state_loaded,
+            failed = R.string.emulation_state_load_failed,
+        )
+
+        override fun screenshot() {
+            // The core captures the next frame it presents, which a paused game never does.
+            closeMenu()
+            lifecycleScope.launch {
+                val saved = screenshots.capture(serial)
+                showMessage(getString(if (saved) R.string.emulation_screenshot_saved else R.string.emulation_screenshot_failed))
             }
         }
 
-        // Settings changed during play (from anywhere in this process) reach the running game.
+        override fun reset() {
+            menuOpen = false
+            pausedByMenu = false
+            restartRequested = true
+            core.shutdown()
+        }
+
+        override fun exit() {
+            menuOpen = false
+            pausedByMenu = false
+            this@EmulationActivity.exit()
+        }
+
+        override fun setShowFps(show: Boolean) = updateSetting("osd.osdShowFps") {
+            it.copy(osd = it.osd.copy(osdShowFps = show))
+        }
+
+        override fun setFastForwardButton(show: Boolean) = updateSetting("frameLimit.fastForwardButton") {
+            it.copy(frameLimit = it.frameLimit.copy(fastForwardButton = show))
+        }
+
+        override fun setFastForwardSpeed(speed: Int) = updateSetting("frameLimit.fastForwardSpeed") {
+            it.copy(frameLimit = it.frameLimit.copy(fastForwardSpeed = speed))
+        }
+    }
+
+    /** Saves or loads the selected slot, then returns to the game. */
+    private fun runStateAction(action: (Int) -> Boolean, done: Int, failed: Int) {
+        val slot = selectedSlot
+        stateBusy = true
         lifecycleScope.launch {
-            settings.changes.drop(1).collect {
-                if (!core.hasActiveVm) return@collect
-                val current = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
-                apply(settings.loadGlobal(), current, serial)
+            val ok = withContext(Dispatchers.IO) { action(slot) }
+            stateBusy = false
+            when {
+                ok -> {
+                    showMessage(getString(done, slot))
+                    closeMenu()
+                }
+                // The card only finishes writing while the game runs, so waiting in the menu cannot help.
+                core.isMemcardBusy -> showMessage(getString(R.string.emulation_state_memcard_busy))
+                else -> showMessage(getString(failed, slot))
             }
         }
     }
 
-    private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides, serial: String?) {
-        core.applySettings(global, overrides, serial)
-        fastForwardButton = SettingsJson.merge(global, overrides).frameLimit.fastForwardButton
+    /**
+     * Changes a setting where it is set (this game's settings or the global ones). The change
+     * reaches the game through the settings collector in [boot].
+     */
+    private fun updateSetting(path: String, transform: (EmulatorSettings) -> EmulatorSettings) {
+        lifecycleScope.launch { container.settingsRepository.updateWhereSet(serial, path, transform) }
+    }
+
+    private fun showMessage(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
@@ -208,11 +373,29 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        gamepad.onKeyEvent(event) || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // While the menu is open a controller navigates it: the D-pad moves focus, A clicks, B goes back.
+        if (menuOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
+        return gamepad.onKeyEvent(event) || super.dispatchKeyEvent(event)
+    }
 
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        gamepad.onMotionEvent(event) || super.dispatchGenericMotionEvent(event)
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        // Unhandled hat motion comes back as D-pad key events, which the menu navigates by.
+        if (menuOpen) return super.dispatchGenericMotionEvent(event)
+        return gamepad.onMotionEvent(event) || super.dispatchGenericMotionEvent(event)
+    }
+
+    private fun menuKeyEvent(event: KeyEvent): KeyEvent {
+        val keyCode = when (event.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A -> KeyEvent.KEYCODE_DPAD_CENTER
+            KeyEvent.KEYCODE_BUTTON_B -> KeyEvent.KEYCODE_BACK
+            else -> return event
+        }
+        return KeyEvent(
+            event.downTime, event.eventTime, event.action, keyCode, event.repeatCount,
+            event.metaState, event.deviceId, event.scanCode, event.flags, event.source,
+        )
+    }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)

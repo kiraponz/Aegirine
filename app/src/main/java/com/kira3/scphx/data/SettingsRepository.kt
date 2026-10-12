@@ -70,6 +70,15 @@ class SettingsRepository(context: Context) {
         saveOverrides(serial, current.overrides.record(current.effective, transform(current.effective)))
     }
 
+    /**
+     * Edits the value at [path] where it is set for [serial]: in that game's settings if the
+     * game overrides it, otherwise in the global settings. For quick toggles during play, which
+     * should neither create an override nor be hidden by one.
+     */
+    suspend fun updateWhereSet(serial: String?, path: String, transform: (EmulatorSettings) -> EmulatorSettings) {
+        if (serial != null && path in loadOverrides(serial)) updateGame(serial, transform) else updateGlobal(transform)
+    }
+
     /** Makes the values at [paths] (dotted, e.g. "graphics.fxaa") follow the global settings again. */
     suspend fun resetGame(serial: String, paths: Collection<String>) = writeMutex.withLock {
         saveOverrides(serial, loadOverrides(serial).without(paths))

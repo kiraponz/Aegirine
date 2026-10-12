@@ -320,6 +320,19 @@ class EmulatorCore(context: Context) {
     /** True while the memory card is being written; a save state is refused then. */
     val isMemcardBusy: Boolean get() = NativeApp.isMemcardBusy()
 
+    /** What [slot] holds for the running game, or null when it is empty. Blocking I/O. */
+    fun saveStateInfo(slot: Int): SaveStateInfo? {
+        val file = NativeApp.getGamePathSlot(slot)?.let(::File)?.takeIf { it.isFile } ?: return null
+        return SaveStateInfo(slot, file.lastModified(), NativeApp.getImageSlot(slot))
+    }
+
+    /**
+     * Captures the next frame the running game presents to [png] (a path ending in .png), at
+     * the internal resolution and without the touch pad or OSD. Returns straight away; the
+     * core writes the file a moment later.
+     */
+    fun saveScreenshot(png: File) = NativeApp.saveScreenshot(png.absolutePath)
+
     val fps: Float get() = NativeApp.getFPS()
 
     // ---- Surface (from SurfaceHolder.Callback) ----
@@ -363,13 +376,16 @@ class EmulatorCore(context: Context) {
     private fun pressureToRange(value: Float): Int =
         (value.coerceIn(0f, 1f) * PAD_RANGE_MAX).toInt()
 
-    private companion object {
-        const val TAG = "EmulatorCore"
-        const val PAD_RANGE_MAX = 32767
+    companion object {
+        /** The save-state slots, as the core numbers them. */
+        val SAVE_STATE_SLOTS: IntRange = 1..10
+
+        private const val TAG = "EmulatorCore"
+        private const val PAD_RANGE_MAX = 32767
 
         // NativeApp.speedhackLimitermode values.
-        const val LIMITER_NOMINAL = 0
-        const val LIMITER_TURBO = 1
-        const val LIMITER_UNLIMITED = 3
+        private const val LIMITER_NOMINAL = 0
+        private const val LIMITER_TURBO = 1
+        private const val LIMITER_UNLIMITED = 3
     }
 }

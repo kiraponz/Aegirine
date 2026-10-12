@@ -21,6 +21,34 @@
     <string name="emulation_boot_failed">Could not start the game: %1$s</string>
     <string name="emulation_bios_missing">Select a BIOS first</string>
     <string name="emulation_fast_forward">Fast forward</string>
+    <string name="emulation_state_saved">Saved to slot %1$d</string>
+    <string name="emulation_state_loaded">Loaded slot %1$d</string>
+    <string name="emulation_state_save_failed">Could not save to slot %1$d</string>
+    <string name="emulation_state_load_failed">Could not load slot %1$d</string>
+    <string name="emulation_state_memcard_busy">The memory card is being written. Play for a moment and try again.</string>
+    <string name="emulation_screenshot_saved">Screenshot saved to Pictures/SCPHX</string>
+    <string name="emulation_screenshot_failed">Could not save the screenshot</string>
+
+    <!-- In-game menu -->
+    <string name="menu_paused">Paused</string>
+    <string name="menu_resume">Resume</string>
+    <string name="menu_save_states">Save states</string>
+    <string name="menu_slot">Slot %1$d</string>
+    <string name="menu_slot_empty">Empty</string>
+    <string name="menu_save">Save</string>
+    <string name="menu_load">Load</string>
+    <string name="menu_screenshot">Take screenshot</string>
+    <string name="menu_reset">Reset</string>
+    <string name="menu_exit">Exit game</string>
+    <string name="menu_show_fps">Show FPS</string>
+    <string name="menu_fast_forward_button">Fast-forward button</string>
+    <string name="menu_fast_forward_speed">Fast-forward speed</string>
+    <string name="menu_fast_forward_unlimited">Unlimited</string>
+    <string name="menu_fast_forward_multiple">%1$d×</string>
+    <string name="menu_confirm_reset">Reset the game?</string>
+    <string name="menu_confirm_exit">Exit the game?</string>
+    <string name="menu_confirm_unsaved">Progress since your last save will be lost.</string>
+    <string name="menu_cancel">Cancel</string>
 
     <!-- Touch pad button labels: the names printed on a DualShock 2 -->
     <string name="pad_l1">L1</string>

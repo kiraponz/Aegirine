@@ -144,6 +144,11 @@ internal object NativeApp {
     @JvmStatic external fun saveStateToSlot(slot: Int): Boolean
     @JvmStatic external fun loadStateFromSlot(slot: Int): Boolean
     @JvmStatic external fun isMemcardBusy(): Boolean
+    @JvmStatic external fun getGamePathSlot(slot: Int): String?
+    @JvmStatic external fun getImageSlot(slot: Int): ByteArray?
+
+    /** Queues a PNG of the next presented frame to [pngPath]. No-op with no VM. */
+    @JvmStatic external fun saveScreenshot(pngPath: String)
 
     // ---- Called from native ----
     // These run on core threads with no exception check on the native side, so nothing may
