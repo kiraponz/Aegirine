@@ -6,6 +6,7 @@ import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.DriverRepository
 import com.kira3.scphx.data.LibraryRepository
 import com.kira3.scphx.data.SettingsRepository
+import com.kira3.scphx.data.db.LibraryDatabase
 import com.kira3.scphx.emucore.EmulatorCore
 
 /**
@@ -18,7 +19,10 @@ class AppContainer(context: Context) {
     val emulatorCore: EmulatorCore by lazy { EmulatorCore(appContext) }
     val appPreferences: AppPreferences by lazy { AppPreferences(appContext) }
     val biosRepository: BiosRepository by lazy { BiosRepository(appContext, emulatorCore, appPreferences) }
-    val libraryRepository: LibraryRepository by lazy { LibraryRepository(appContext, emulatorCore, appPreferences) }
+    private val libraryDatabase: LibraryDatabase by lazy { LibraryDatabase.create(appContext) }
+    val libraryRepository: LibraryRepository by lazy {
+        LibraryRepository(appContext, emulatorCore, appPreferences, libraryDatabase.gameDao())
+    }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
     val driverRepository: DriverRepository by lazy { DriverRepository(appContext) }
 }

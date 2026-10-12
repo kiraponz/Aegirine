@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.kira3.scphx.ui.bios.BiosScreen
 import com.kira3.scphx.ui.library.LibraryScreen
 import com.kira3.scphx.ui.settings.GpuDriverScreen
 import com.kira3.scphx.ui.settings.SettingsCategoryScreen
@@ -44,8 +45,12 @@ fun ScphxApp() {
             entry<LibraryRoute> {
                 LibraryScreen(
                     onOpenSettings = { backStack.add(SettingsRoute()) },
+                    onOpenBios = { backStack.add(BiosRoute) },
                     onOpenGameSettings = { serial, title -> backStack.add(SettingsRoute(serial, title)) },
                 )
+            }
+            entry<BiosRoute> {
+                BiosScreen(onBack = { backStack.removeLastOrNull() })
             }
             entry<SettingsRoute>(
                 metadata = { route ->

@@ -7,6 +7,7 @@ import com.kira3.scphx.emucore.BiosMetadata
 import com.kira3.scphx.emucore.EmulatorCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -29,9 +30,12 @@ class BiosRepository(
         name?.let { withContext(Dispatchers.IO) { readInstalled(it) } }
     }
 
+    /** File name of the selected BIOS, even if the file is gone or invalid. */
+    val selectedFileName: Flow<String?> = preferences.biosFileName
+
     /**
-     * Copies the BIOS at [uri] into the BIOS folder and selects it.
-     * Returns null if the file is not a PS2 BIOS.
+     * Copies the BIOS at [uri] into the BIOS folder. It becomes the selected BIOS if none is
+     * selected yet. Returns null if the file is not a PS2 BIOS.
      */
     suspend fun import(uri: Uri): Bios? = withContext(Dispatchers.IO) {
         core.initialize()
@@ -46,8 +50,19 @@ class BiosRepository(
             temp.delete()
             return@withContext null
         }
-        preferences.setBiosFileName(name)
+        if (selected.first() == null) preferences.setBiosFileName(name)
         Bios(name, metadata)
+    }
+
+    suspend fun select(fileName: String) = preferences.setBiosFileName(fileName)
+
+    /** Deletes the BIOS file. If it was selected, another installed BIOS is selected instead. */
+    suspend fun delete(fileName: String) = withContext(Dispatchers.IO) {
+        File(core.biosDir, fileName).delete()
+        if (preferences.biosFileName.first() == fileName) {
+            val next = installed().firstOrNull()
+            if (next != null) preferences.setBiosFileName(next.fileName) else preferences.clearBiosFileName()
+        }
     }
 
     /** Every valid BIOS in the BIOS folder, by file name. */

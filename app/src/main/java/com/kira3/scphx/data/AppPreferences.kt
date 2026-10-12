@@ -30,6 +30,10 @@ class AppPreferences(context: Context) {
         dataStore.edit { it[BIOS_FILE_NAME] = name }
     }
 
+    suspend fun clearBiosFileName() {
+        dataStore.edit { it.remove(BIOS_FILE_NAME) }
+    }
+
     private companion object {
         val GAME_FOLDER = stringPreferencesKey("game_folder")
         val BIOS_FILE_NAME = stringPreferencesKey("bios_file_name")

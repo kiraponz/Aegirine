@@ -1,60 +1,65 @@
 package com.kira3.scphx.ui.library
 
 import android.net.Uri
+import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kira3.scphx.R
-import com.kira3.scphx.data.GameFile
+import com.kira3.scphx.data.Game
 import com.kira3.scphx.emulation.EmulationActivity
 import com.kira3.scphx.ui.theme.ScphxTheme
 
 @Composable
 fun LibraryScreen(
     onOpenSettings: () -> Unit,
+    onOpenBios: () -> Unit,
     onOpenGameSettings: (serial: String, title: String) -> Unit,
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    val pickBios = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let(viewModel::onBiosPicked)
-    }
     val pickGameFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let(viewModel::onGameFolderPicked)
     }
@@ -84,8 +89,9 @@ fun LibraryScreen(
         state = state,
         snackbarHostState = snackbarHostState,
         onOpenSettings = onOpenSettings,
-        onPickBios = { pickBios.launch(arrayOf("*/*")) },
+        onOpenBios = onOpenBios,
         onPickGameFolder = { pickGameFolder.launch(null) },
+        onRefresh = viewModel::refresh,
         onGameClick = viewModel::onGameClicked,
         onGameSettingsClick = viewModel::onGameSettingsClicked,
     )
@@ -93,7 +99,6 @@ fun LibraryScreen(
 
 private val LibraryMessage.textRes: Int
     get() = when (this) {
-        LibraryMessage.InvalidBios -> R.string.library_message_invalid_bios
         LibraryMessage.ScanFailed -> R.string.library_message_scan_failed
         LibraryMessage.BiosRequired -> R.string.library_message_bios_required
         LibraryMessage.CoreUnavailable -> R.string.library_message_core_unavailable
@@ -106,11 +111,13 @@ private fun LibraryContent(
     state: LibraryUiState,
     snackbarHostState: SnackbarHostState,
     onOpenSettings: () -> Unit,
-    onPickBios: () -> Unit,
+    onOpenBios: () -> Unit,
     onPickGameFolder: () -> Unit,
-    onGameClick: (GameFile) -> Unit,
-    onGameSettingsClick: (GameFile) -> Unit,
+    onRefresh: () -> Unit,
+    onGameClick: (Game) -> Unit,
+    onGameSettingsClick: (Game) -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -119,85 +126,110 @@ private fun LibraryContent(
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title))
                     }
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.library_more))
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bios_title)) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenBios()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_change_game_folder)) },
+                            onClick = {
+                                menuOpen = false
+                                onPickGameFolder()
+                            },
+                        )
+                    }
                 },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
-        LazyColumn(
+        val games = state.games
+        PullToRefreshBox(
+            isRefreshing = state.refreshing,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            // Provisional setup rows; they move to the BIOS and library settings later.
-            item {
-                val bios = state.bios
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.library_bios)) },
-                    supportingContent = {
-                        Text(
-                            if (bios == null) {
-                                stringResource(R.string.library_not_selected)
-                            } else {
-                                "${bios.metadata.description} (${bios.metadata.versionString})"
-                            },
-                        )
-                    },
-                    trailingContent = {
-                        TextButton(onClick = onPickBios) { Text(stringResource(R.string.library_select)) }
-                    },
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.library_game_folder)) },
-                    supportingContent = {
-                        Text(
-                            stringResource(
-                                if (state.hasGameFolder) R.string.library_selected else R.string.library_not_selected,
-                            ),
-                        )
-                    },
-                    trailingContent = {
-                        TextButton(onClick = onPickGameFolder) { Text(stringResource(R.string.library_select)) }
-                    },
-                )
-                HorizontalDivider()
-            }
-
-            val games = state.games
             when {
-                games == null -> item {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(16.dp))
+                // Nothing to show yet; the refresh indicator covers the wait.
+                games == null -> Unit
+                !state.hasGameFolder -> EmptyState(
+                    text = stringResource(R.string.library_no_folder),
+                    actionText = stringResource(R.string.library_select_game_folder),
+                    onAction = onPickGameFolder,
+                )
+                games.isEmpty() -> if (!state.refreshing) {
+                    EmptyState(
+                        text = stringResource(R.string.library_empty),
+                        actionText = stringResource(R.string.library_change_game_folder),
+                        onAction = onPickGameFolder,
+                    )
                 }
-                games.isEmpty() -> item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.library_empty),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    if (state.bios == null) {
+                        item(key = "bios-missing") {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.library_bios_missing)) },
+                                supportingContent = { Text(stringResource(R.string.library_bios_missing_summary)) },
+                                trailingContent = {
+                                    FilledTonalButton(onClick = onOpenBios) {
+                                        Text(stringResource(R.string.library_bios_set_up))
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    items(games, key = { it.uri.toString() }) { game ->
+                        ListItem(
+                            headlineContent = { Text(game.title, maxLines = 2) },
+                            supportingContent = { Text(game.details(), maxLines = 1) },
+                            trailingContent = {
+                                IconButton(onClick = { onGameSettingsClick(game) }) {
+                                    Icon(
+                                        painterResource(R.drawable.ic_tune),
+                                        contentDescription = stringResource(R.string.library_game_settings),
+                                    )
+                                }
+                            },
+                            modifier = Modifier.clickable { onGameClick(game) },
                         )
                     }
                 }
-                else -> items(games, key = { it.uri.toString() }) { game ->
-                    ListItem(
-                        headlineContent = { Text(game.name) },
-                        trailingContent = {
-                            IconButton(onClick = { onGameSettingsClick(game) }) {
-                                Icon(
-                                    painterResource(R.drawable.ic_tune),
-                                    contentDescription = stringResource(R.string.library_game_settings),
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable { onGameClick(game) },
-                    )
-                }
             }
         }
+    }
+}
+
+/** Serial, format and size, e.g. "SLUS-20312 · CHD · 2.1 GB". */
+@Composable
+private fun Game.details(): String {
+    val size = Formatter.formatShortFileSize(LocalContext.current, sizeBytes)
+    return listOfNotNull(serial, format.ifEmpty { null }, size.takeIf { sizeBytes > 0 }).joinToString(" · ")
+}
+
+@Composable
+private fun EmptyState(text: String, actionText: String, onAction: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        FilledTonalButton(onClick = onAction) { Text(actionText) }
     }
 }
 
@@ -208,12 +240,13 @@ private fun LibraryContentPreview() {
         LibraryContent(
             state = LibraryUiState(
                 hasGameFolder = true,
-                games = listOf(GameFile("Example Game (USA).chd", Uri.EMPTY)),
+                games = listOf(Game(Uri.EMPTY, "Example Game (USA).chd", "SLUS-20312", true, 2_100_000_000L)),
             ),
             snackbarHostState = SnackbarHostState(),
             onOpenSettings = {},
-            onPickBios = {},
+            onOpenBios = {},
             onPickGameFolder = {},
+            onRefresh = {},
             onGameClick = {},
             onGameSettingsClick = {},
         )

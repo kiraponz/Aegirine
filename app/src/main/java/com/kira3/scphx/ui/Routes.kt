@@ -9,6 +9,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 data object LibraryRoute : NavKey
 
+/** The BIOS files the app holds. */
+@Serializable
+data object BiosRoute : NavKey
+
 /** The settings categories: global when [serial] is null, else that game's. */
 @Serializable
 data class SettingsRoute(val serial: String? = null, val gameTitle: String? = null) : NavKey
