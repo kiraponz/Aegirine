@@ -203,4 +203,20 @@ class Ps2CardTest {
         }
         System.getenv("SCPHX_COPY_OUT")?.let { target.copyTo(File(it), overwrite = true) }
     }
+
+    @Test
+    fun formatErasedLeavesAnEmptyFormattedCard() {
+        val file = blankCard()
+        Ps2Card(file, writable = true).use { it.write(save("BASLUS-00001", 3000), replace = false) }
+        val length = file.length()
+        file.outputStream().use { out -> repeat((length / 16).toInt()) { out.write(ByteArray(16) { 0xFF.toByte() }) } }
+        Ps2Card(file, writable = true).use {
+            assertEquals(CardState.Blank, it.state)
+            it.formatErased()
+        }
+        Ps2Card(file).use {
+            assertEquals(CardState.Formatted, it.state)
+            assertTrue(it.list().isEmpty())
+        }
+    }
 }

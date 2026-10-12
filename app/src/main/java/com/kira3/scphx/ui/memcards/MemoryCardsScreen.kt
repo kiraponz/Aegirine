@@ -78,6 +78,7 @@ fun MemoryCardsScreen(
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<MemoryCard?>(null) }
     var deleting by remember { mutableStateOf<MemoryCard?>(null) }
+    var formatting by remember { mutableStateOf<MemoryCard?>(null) }
     var exporting by remember { mutableStateOf<MemoryCard?>(null) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     // Beside the settings list there is nothing to go back to.
@@ -99,6 +100,7 @@ fun MemoryCardsScreen(
         MemoryCardMessage.Exported to stringResource(R.string.memcards_exported),
         MemoryCardMessage.Renamed to stringResource(R.string.memcards_renamed),
         MemoryCardMessage.Deleted to stringResource(R.string.memcards_deleted),
+        MemoryCardMessage.Formatted to stringResource(R.string.memcards_formatted),
         MemoryCardMessage.Exists to stringResource(R.string.memcards_exists),
         MemoryCardMessage.Invalid to stringResource(R.string.memcards_invalid),
         MemoryCardMessage.Failed to stringResource(R.string.memcards_failed),
@@ -169,6 +171,7 @@ fun MemoryCardsScreen(
                                 saveCard.launch(viewModel.exportName(card))
                             },
                             onRename = { renaming = card },
+                            onFormat = { formatting = card },
                             onDelete = { deleting = card },
                         )
                     },
@@ -210,6 +213,22 @@ fun MemoryCardsScreen(
             onDismiss = { renaming = null },
         )
     }
+    formatting?.let { card ->
+        AlertDialog(
+            onDismissRequest = { formatting = null },
+            title = { Text(stringResource(R.string.memcards_format_title, card.name)) },
+            text = { Text(stringResource(R.string.memcards_format_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    formatting = null
+                    viewModel.format(card)
+                }) { Text(stringResource(R.string.memcards_format)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { formatting = null }) { Text(stringResource(R.string.settings_cancel)) }
+            },
+        )
+    }
     deleting?.let { card ->
         AlertDialog(
             onDismissRequest = { deleting = null },
@@ -229,7 +248,7 @@ fun MemoryCardsScreen(
 }
 
 @Composable
-private fun CardMenu(enabled: Boolean, onExport: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun CardMenu(enabled: Boolean, onExport: () -> Unit, onRename: () -> Unit, onFormat: () -> Unit, onDelete: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }, enabled = enabled) {
@@ -243,6 +262,10 @@ private fun CardMenu(enabled: Boolean, onExport: () -> Unit, onRename: () -> Uni
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.memcards_rename)) },
                 onClick = { open = false; onRename() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.memcards_format)) },
+                onClick = { open = false; onFormat() },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.memcards_delete)) },

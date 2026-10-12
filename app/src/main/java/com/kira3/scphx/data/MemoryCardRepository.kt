@@ -92,6 +92,42 @@ class MemoryCardRepository(
         MemoryCardResult.Ok
     }
 
+    /**
+     * Erases every save on [card] and leaves it formatted. A file card is rebuilt as a copy of the
+     * same size, which replaces the card only when it is done.
+     */
+    suspend fun format(card: MemoryCard): MemoryCardResult = withContext(Dispatchers.IO) {
+        if (gameRunning()) return@withContext MemoryCardResult.Busy
+        val original = File(core.memoryCardsDir, card.name)
+        runCatching {
+            if (card.isFolder) {
+                original.listFiles().orEmpty()
+                    .filter { it.isDirectory && !it.name.startsWith("_pcsx2_") }
+                    .forEach { it.deleteRecursively() }
+                MemoryCardResult.Ok
+            } else {
+                val temp = File(core.memoryCardsDir, "${card.name}$TEMP_SUFFIX")
+                try {
+                    val erased = ByteArray(1 shl 16) { 0xFF.toByte() }
+                    temp.outputStream().use { out ->
+                        var left = original.length()
+                        while (left > 0) {
+                            val n = minOf(left, erased.size.toLong()).toInt()
+                            out.write(erased, 0, n)
+                            left -= n
+                        }
+                    }
+                    val formatted = Ps2Card(temp, writable = true).use { store ->
+                        (store.state == CardState.Blank).also { if (it) store.formatErased() }
+                    }
+                    if (formatted && temp.renameTo(original)) MemoryCardResult.Ok else MemoryCardResult.Failed
+                } finally {
+                    temp.delete()
+                }
+            }
+        }.getOrDefault(MemoryCardResult.Failed).also { changed() }
+    }
+
     /** The file name to offer when exporting [card]: a folder card is saved as a zip. */
     fun exportName(card: MemoryCard): String = if (card.isFolder) "${card.name}.zip" else card.name
 

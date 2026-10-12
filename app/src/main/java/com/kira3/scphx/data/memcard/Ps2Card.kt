@@ -357,6 +357,12 @@ class Ps2Card(private val file: File, private val writable: Boolean = false) : S
         return WriteResult.Ok
     }
 
+    /** Formats a card whose every byte is erased (0xFF); the saves it held are gone. */
+    fun formatErased() {
+        check(state == CardState.Blank)
+        format()
+    }
+
     /** Writes an empty file system over a blank card of any of the standard sizes. */
     private fun format() {
         check(writable)

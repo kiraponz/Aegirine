@@ -152,12 +152,16 @@
     <string name="settings_mc_slot1">Card in slot 1</string>
     <string name="settings_mc_slot2">Card in slot 2</string>
     <string name="settings_memory_cards_manage">Manage memory cards</string>
-    <string name="settings_memory_cards_manage_summary">Create, import, export, rename and delete cards</string>
+    <string name="settings_memory_cards_manage_summary">Create, import, export, rename, format and delete cards</string>
     <string name="memcards_title">Memory cards</string>
     <string name="memcards_create">Create</string>
     <string name="memcards_import">Import</string>
     <string name="memcards_export">Export</string>
     <string name="memcards_rename">Rename</string>
+    <string name="memcards_format">Format</string>
+    <string name="memcards_format_title">Format %1$s?</string>
+    <string name="memcards_format_text">All saves on the card are erased, leaving it empty.</string>
+    <string name="memcards_formatted">Card formatted</string>
     <string name="memcards_delete">Delete</string>
     <string name="memcards_actions">Card actions</string>
     <string name="memcards_name">Name</string>

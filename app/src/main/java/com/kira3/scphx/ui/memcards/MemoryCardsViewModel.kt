@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
 
 /** What to tell the user once, after an action. */
 enum class MemoryCardMessage {
-    Created, Imported, Exported, Renamed, Deleted, Exists, Invalid, Failed, Full, Busy,
+    Created, Imported, Exported, Renamed, Deleted, Formatted, Exists, Invalid, Failed, Full, Busy,
     SavesCopied, SavesMoved, SavesDeleted,
 }
 
@@ -60,6 +60,8 @@ class MemoryCardsViewModel(private val repository: MemoryCardRepository) : ViewM
 
     fun rename(card: MemoryCard, newName: String) =
         run(MemoryCardMessage.Renamed) { repository.rename(card, newName) }
+
+    fun format(card: MemoryCard) = run(MemoryCardMessage.Formatted) { repository.format(card) }
 
     fun delete(card: MemoryCard) = run(MemoryCardMessage.Deleted) { repository.delete(card) }
 
