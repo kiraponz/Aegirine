@@ -16,6 +16,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroupDefaults
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kira3.scphx.R
+import com.kira3.scphx.data.GpuDriver
 import com.kira3.scphx.emucore.settings.PerformancePreset
 import com.kira3.scphx.emucore.settings.SettingsValues
 import java.util.Locale
@@ -61,6 +63,7 @@ interface SettingsActions {
     fun set(path: String, value: Any)
     fun applyPreset(preset: PerformancePreset)
     fun reset(path: String)
+    fun openGpuDriver()
 }
 
 /** One setting as a segmented list item. [shapes] places it within its section's group. */
@@ -90,6 +93,7 @@ fun SettingRow(
         is NumberInput -> NumberRow(row, setting, actions)
         PresetSetting -> PresetRow(row, actions)
         GameBiosSetting -> DialogChoiceRow(row, biosChoice(state), actions)
+        GpuDriverSetting -> GpuDriverRow(row, state, actions)
     }
 }
 
@@ -111,6 +115,29 @@ private fun biosChoice(state: SettingsUiState): Choice = Choice(
         state.bioses.map { Option(it.fileName, Label.text("${it.metadata.description} (${it.fileName})")) },
     gameOnly = true,
 )
+
+@Composable
+private fun GpuDriverRow(row: RowParams, state: SettingsUiState, actions: SettingsActions) {
+    SegmentedListItem(
+        onClick = actions::openGpuDriver,
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        enabled = row.enabled,
+        overlineContent = row.overline,
+        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+        supportingContent = {
+            Supporting(GpuDriverSetting, value = driverLabel(row.values.string(GpuDriverSetting.path!!), state.drivers))
+        },
+    ) { Text(stringResource(GpuDriverSetting.title)) }
+}
+
+/** The name of the driver [id] stored in the settings, as the boot will resolve it. */
+@Composable
+fun driverLabel(id: String, drivers: List<GpuDriver>): String = when {
+    id.isEmpty() -> stringResource(R.string.driver_system)
+    else -> drivers.firstOrNull { it.id == id }?.name ?: stringResource(R.string.driver_missing)
+}
 
 /** The text under a row's title: its current value, what it does, and when it takes effect. */
 @Composable

@@ -386,4 +386,23 @@
     <string name="settings_sw_threads">Rendering threads</string>
     <string name="settings_sw_tile_height">Thread tile height</string>
     <string name="settings_overridden_count">Changed for this game: %1$d</string>
+
+    <!-- GPU driver -->
+    <string name="settings_gpu_driver">GPU driver</string>
+    <string name="settings_gpu_driver_summary">Vulkan driver for the Vulkan renderer</string>
+    <string name="settings_turnip_ubwc">Turnip UBWC flag hint</string>
+    <string name="settings_turnip_ubwc_summary">Fixes graphics glitches with recent Turnip builds on Adreno 740 (Snapdragon 8 Gen 2)</string>
+    <string name="driver_system">System driver</string>
+    <string name="driver_system_summary">The driver that came with this device</string>
+    <string name="driver_missing">Not installed. Using the system driver</string>
+    <string name="driver_same_as_global">Same as global settings</string>
+    <string name="driver_global_summary">Uses the driver picked in the global settings</string>
+    <string name="driver_install">Install from file</string>
+    <string name="driver_installing">Installing…</string>
+    <string name="driver_installed">Driver installed and selected</string>
+    <string name="driver_not_a_driver">This file is not a driver pack</string>
+    <string name="driver_delete">Delete</string>
+    <string name="driver_delete_title">Delete %1$s?</string>
+    <string name="driver_delete_text">Games set to use it switch to the global driver.</string>
+    <string name="driver_about">Driver packs are .zip files in the adrenotools format, such as Mesa Turnip builds for Adreno GPUs. A driver that fails to load falls back to the system driver. Changes apply the next time a game starts.</string>
 </resources>

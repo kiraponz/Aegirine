@@ -98,6 +98,11 @@ internal object NativeApp {
     @JvmStatic external fun setAdpfEnabled(enabled: Boolean)
     /** Read when the VM boots. */
     @JvmStatic external fun setAffinityMode(mode: Int)
+    /**
+     * Vulkan driver pack (adrenotools layout) the next boot loads, or the system driver when
+     * every argument is "". A pack that fails to open falls back to the system driver.
+     */
+    @JvmStatic external fun setCustomVulkanDriver(driverDir: String, driverName: String, redirectDir: String, hookLibDir: String)
 
     // ---- Surface ----
 

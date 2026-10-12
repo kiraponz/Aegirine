@@ -3,6 +3,7 @@ package com.kira3.scphx.emucore
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.system.Os
 import android.util.Log
 import android.view.Surface
 import com.kira3.scphx.emucore.settings.CoreKey
@@ -281,6 +282,32 @@ class EmulatorCore(context: Context) {
     }
 
     // ---- VM ----
+
+    /**
+     * The Vulkan driver the next boot loads: [driver], or the system driver when null.
+     * [ubwcFlagHint] turns on Turnip's UBWC flag hint, which recent Turnip builds need on
+     * Adreno 740 to draw correctly; other drivers ignore it. Call before [runVm].
+     */
+    fun useVulkanDriver(driver: VulkanDriver?, ubwcFlagHint: Boolean) {
+        if (driver == null) {
+            NativeApp.setCustomVulkanDriver("", "", "", "")
+        } else {
+            // The driver writes its shader cache through the redirect hook, since it cannot
+            // write where it would on a system install.
+            val cache = File(driver.dir, "cache").apply { mkdirs() }
+            NativeApp.setCustomVulkanDriver(
+                driver.dir.absolutePath + "/",
+                driver.libraryName,
+                cache.absolutePath + "/",
+                appContext.applicationInfo.nativeLibraryDir,
+            )
+        }
+        // Mesa reads its options from the environment each time it creates a device.
+        runCatching {
+            if (ubwcFlagHint) Os.setenv("FD_DEV_FEATURES", "enable_tp_ubwc_flag_hint=1", true)
+            else Os.unsetenv("FD_DEV_FEATURES")
+        }
+    }
 
     /**
      * Boots [gameUri] (a content:// URI the app holds read permission for) and runs it

@@ -6,6 +6,7 @@ object SettingsEffects {
     val appliesOnNextBoot: Set<String> = setOf(
         "output.renderer",
         "output.customDriverId",
+        "output.turnipUbwcHint",
         "output.affinityMode",
         "output.swThreadsHeight",
         "output.autoProgressiveScan",

@@ -205,6 +205,7 @@ class EmulationActivity : ComponentActivity() {
         }
         core.setBios(bios)
         apply(global, overrides)
+        useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
         Log.i(TAG, "Booting $gameUri (serial $serial)")
         emulationThread = thread(name = "Emulation") {
@@ -226,6 +227,19 @@ class EmulationActivity : ComponentActivity() {
             }
             else -> finish()
         }
+    }
+
+    /**
+     * Points the core at the custom Vulkan driver this game uses. A game whose driver has been
+     * deleted follows the global driver, and the system driver is used when neither is installed.
+     */
+    private suspend fun useVulkanDriver(global: EmulatorSettings, effective: EmulatorSettings) {
+        val installed = container.driverRepository.list()
+        fun find(id: String) = installed.firstOrNull { it.id == id }
+        val id = effective.output.customDriverId
+        val driver = if (id.isEmpty()) null else find(id) ?: find(global.output.customDriverId)
+        if (id.isNotEmpty() && driver?.id != id) Log.w(TAG, "Driver $id is not installed, using ${driver?.id ?: "the system driver"}")
+        core.useVulkanDriver(driver?.toVulkanDriver(), effective.output.turnipUbwcHint)
     }
 
     private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides) {

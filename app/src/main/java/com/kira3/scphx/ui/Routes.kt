@@ -20,3 +20,7 @@ data class SettingsCategoryRoute(
     val serial: String? = null,
     val gameTitle: String? = null,
 ) : NavKey
+
+/** The custom Vulkan driver of the settings [SettingsRoute] lists, global or for a game. */
+@Serializable
+data class GpuDriverRoute(val serial: String? = null, val gameTitle: String? = null) : NavKey

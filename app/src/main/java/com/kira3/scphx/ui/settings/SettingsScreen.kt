@@ -197,6 +197,7 @@ fun SettingsCategoryScreen(
     category: SettingsCategory,
     serial: String?,
     gameTitle: String?,
+    onOpenGpuDriver: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(serial)),
 ) {
@@ -209,11 +210,12 @@ fun SettingsCategoryScreen(
     val twoPane = LocalListDetailSceneScope.current != null
     val overridden = state?.overrides.orEmpty().filter { it in category.paths }
 
-    val actions = remember(viewModel) {
+    val actions = remember(viewModel, onOpenGpuDriver) {
         object : SettingsActions {
             override fun set(path: String, value: Any) = viewModel.set(path, value)
             override fun applyPreset(preset: PerformancePreset) = viewModel.applyPreset(preset)
             override fun reset(path: String) = viewModel.reset(listOf(path))
+            override fun openGpuDriver() = onOpenGpuDriver()
         }
     }
 
@@ -331,7 +333,7 @@ private fun ConfirmResetDialog(text: String, onConfirm: () -> Unit, onDismiss: (
 }
 
 @Composable
-private fun BackButton(onBack: () -> Unit) {
+internal fun BackButton(onBack: () -> Unit) {
     IconButton(onClick = onBack) {
         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.navigate_back))
     }
@@ -339,7 +341,7 @@ private fun BackButton(onBack: () -> Unit) {
 
 /** Side gutters for the grouped lists, and room for the navigation bar below the last item. */
 @Composable
-private fun listPadding(innerPadding: PaddingValues): PaddingValues {
+internal fun listPadding(innerPadding: PaddingValues): PaddingValues {
     val direction = LocalLayoutDirection.current
     val bottom = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
     return PaddingValues(
@@ -352,7 +354,7 @@ private fun listPadding(innerPadding: PaddingValues): PaddingValues {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun settingsTopBarColors() = TopAppBarDefaults.topAppBarColors(
+internal fun settingsTopBarColors() = TopAppBarDefaults.topAppBarColors(
     containerColor = MaterialTheme.colorScheme.surfaceContainer,
     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
 )

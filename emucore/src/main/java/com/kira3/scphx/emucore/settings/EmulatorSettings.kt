@@ -338,6 +338,8 @@ data class OutputSettings(
     val upscaleFloat: Float = 1.0f,
     /** Installed custom Vulkan driver (e.g. Turnip) to load, or "" for the system driver. Applies on the next boot. */
     val customDriverId: String = "",
+    /** Turnip's UBWC flag hint (FD_DEV_FEATURES), for glitches on Adreno 740. App side. Applies on the next boot. */
+    val turnipUbwcHint: Boolean = false,
     /** Play screen orientation: 0 device setting, 1 landscape, 2 portrait, 3 auto-rotate. App side. */
     val orientation: Int = 0,
     /** In portrait, align the picture to the top (true) instead of centering it. */

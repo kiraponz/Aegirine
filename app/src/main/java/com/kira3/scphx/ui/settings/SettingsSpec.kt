@@ -119,3 +119,9 @@ data object PresetSetting : Setting(null, R.string.settings_preset, R.string.set
 data object GameBiosSetting : Setting(
     "system.biosFilename", R.string.settings_game_bios, R.string.settings_game_bios_summary, null, null, gameOnly = true,
 )
+
+/** The custom Vulkan driver, picked on its own screen where packs are also installed. */
+data object GpuDriverSetting : Setting(
+    "output.customDriverId", R.string.settings_gpu_driver, R.string.settings_gpu_driver_summary, null,
+    enabledWhen = { it.string("output.renderer") in setOf("auto", "vulkan") },
+)

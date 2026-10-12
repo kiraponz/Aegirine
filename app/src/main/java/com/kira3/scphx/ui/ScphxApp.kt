@@ -14,6 +14,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.kira3.scphx.ui.library.LibraryScreen
+import com.kira3.scphx.ui.settings.GpuDriverScreen
 import com.kira3.scphx.ui.settings.SettingsCategoryScreen
 import com.kira3.scphx.ui.settings.SettingsDetailPlaceholder
 import com.kira3.scphx.ui.settings.SettingsHomeScreen
@@ -54,12 +55,15 @@ fun ScphxApp() {
                 SettingsHomeScreen(
                     serial = route.serial,
                     gameTitle = route.gameTitle,
-                    selected = (backStack.lastOrNull() as? SettingsCategoryRoute)?.category,
+                    selected = backStack.filterIsInstance<SettingsCategoryRoute>().lastOrNull()?.category,
                     onOpenCategory = { category ->
                         val detail = SettingsCategoryRoute(category, route.serial, route.gameTitle)
-                        // Beside the list, picking another category replaces the open one.
-                        if (backStack.lastOrNull() is SettingsCategoryRoute) backStack[backStack.lastIndex] = detail
-                        else backStack.add(detail)
+                        // Beside the list, picking another category replaces what is open there.
+                        val last = backStack.lastOrNull()
+                        if (last is SettingsCategoryRoute || last is GpuDriverRoute) {
+                            while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
+                        }
+                        backStack.add(detail)
                     },
                     onBack = { backStack.removeLastOrNull() },
                 )
@@ -71,6 +75,18 @@ fun ScphxApp() {
             ) { route ->
                 SettingsCategoryScreen(
                     category = route.category,
+                    serial = route.serial,
+                    gameTitle = route.gameTitle,
+                    onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<GpuDriverRoute>(
+                metadata = { route ->
+                    ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute(route.serial, route.gameTitle))
+                },
+            ) { route ->
+                GpuDriverScreen(
                     serial = route.serial,
                     gameTitle = route.gameTitle,
                     onBack = { backStack.removeLastOrNull() },

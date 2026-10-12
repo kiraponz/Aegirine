@@ -53,6 +53,7 @@ object SettingsCatalog {
                     ),
                     inline = true,
                 ),
+                GpuDriverSetting,
                 Choice(
                     "output.upscaleFloat", R.string.settings_resolution, R.string.settings_resolution_summary,
                     listOf(
@@ -160,6 +161,10 @@ object SettingsCatalog {
                 Choice(
                     "hwFixes.gpuProfile", R.string.settings_gpu_profile, R.string.settings_gpu_profile_summary,
                     options(auto, text("Mali"), text("Adreno"), text("PowerVR"), text("Xclipse")),
+                ),
+                Toggle(
+                    "output.turnipUbwcHint", R.string.settings_turnip_ubwc, R.string.settings_turnip_ubwc_summary,
+                    visibleWhen = { it.string("output.customDriverId").isNotEmpty() },
                 ),
                 Toggle("display.useAngleOpenGL", R.string.settings_angle, R.string.settings_angle_summary),
                 Toggle("display.vsyncEnable", R.string.settings_vsync),
