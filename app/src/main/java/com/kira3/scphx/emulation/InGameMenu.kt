@@ -72,6 +72,8 @@ interface InGameMenuActions {
     fun exitAndResumeLater()
     fun rewind()
     fun cheats()
+    fun macros()
+    fun setMacroButton(show: Boolean)
     fun setShowFps(show: Boolean)
     fun setFastForwardButton(show: Boolean)
     fun setScreenshotButton(show: Boolean)
@@ -151,6 +153,9 @@ fun InGameMenu(
                 if (hasGame) {
                     MenuAction(stringResource(R.string.menu_cheats), !busy, actions::cheats)
                 }
+                if (hasGame) {
+                    MenuAction(stringResource(R.string.macro_title), !busy, actions::macros)
+                }
                 MenuAction(stringResource(R.string.menu_screenshot), !busy, actions::screenshot)
                 MenuAction(stringResource(R.string.menu_reset), !busy) { confirm = Confirm.Reset }
                 if (hasGame) {
@@ -172,6 +177,14 @@ fun InGameMenu(
                     !busy,
                     actions::setScreenshotButton,
                 )
+                if (hasGame) {
+                    MenuSwitch(
+                        stringResource(R.string.menu_macro_button),
+                        settings.frameLimit.macroButton,
+                        !busy,
+                        actions::setMacroButton,
+                    )
+                }
                 FastForwardSpeed(settings.frameLimit.fastForwardSpeed, !busy, actions::setFastForwardSpeed)
             }
         }

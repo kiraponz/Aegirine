@@ -471,6 +471,15 @@ class EmulatorCore(context: Context) {
         NativeApp.setOsdSafeAreaInsets(left, top, right, bottom)
 
     // ---- Input ----
+
+    /** Hears every press and stick move sent below, on the thread that sent it. For recording. */
+    interface PadListener {
+        fun onButton(port: Int, button: PadButton, pressed: Boolean, pressure: Float)
+        fun onStick(port: Int, stick: PadStick, x: Float, y: Float)
+    }
+
+    @Volatile
+    var padListener: PadListener? = null
     // Call these directly from input handlers, not through a ViewModel, to keep latency low.
 
     /**
@@ -478,6 +487,7 @@ class EmulatorCore(context: Context) {
      * pressed button is pushed, for the games that read button pressure (or an analog trigger).
      */
     fun setPadButton(port: Int, button: PadButton, pressed: Boolean, pressure: Float = 1f) {
+        padListener?.onButton(port, button, pressed, pressure)
         val range = if (pressed) pressureToRange(pressure) else 0
         NativeApp.setPadButtonForPort(port, button.code, range, pressed && range > 0)
     }
@@ -487,6 +497,7 @@ class EmulatorCore(context: Context) {
      * input (deadzone) before calling; this sends it as is.
      */
     fun setPadStick(port: Int, stick: PadStick, x: Float, y: Float) {
+        padListener?.onStick(port, stick, x, y)
         // The core takes each direction as its own half-axis.
         setHalfAxis(port, stick.right, x)
         setHalfAxis(port, stick.left, -x)

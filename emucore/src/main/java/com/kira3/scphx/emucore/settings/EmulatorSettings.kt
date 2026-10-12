@@ -120,6 +120,8 @@ data class FrameLimitSettings(
     val fastForwardButton: Boolean = true,
     /** Show a screenshot button over the game. Off by default. App side. */
     val screenshotButton: Boolean = false,
+    /** Show a macro button over the game. Off by default. App side. */
+    val macroButton: Boolean = false,
 )
 
 /** Audio output (SPU2). */

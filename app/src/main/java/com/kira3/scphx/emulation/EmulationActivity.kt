@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.IntentCompat
 import androidx.core.view.WindowCompat
@@ -49,6 +51,9 @@ import com.kira3.scphx.emucore.VmState
 import com.kira3.scphx.emulation.input.ControllerRumble
 import com.kira3.scphx.emulation.input.GamepadInput
 import com.kira3.scphx.emulation.input.PadSink
+import com.kira3.scphx.emulation.macro.MacroPlayer
+import com.kira3.scphx.emulation.macro.MacroRecorder
+import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.emulation.input.TouchPad
 import com.kira3.scphx.emulation.input.gameAspectOf
 import com.kira3.scphx.emucore.settings.EmulatorSettings
@@ -63,6 +68,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 import kotlin.concurrent.thread
 
 /**
@@ -142,6 +148,19 @@ class EmulationActivity : ComponentActivity() {
     private var cheatsOpen by mutableStateOf(false)
     private var cheatList by mutableStateOf<List<Cheat>?>(null)
 
+    // ---- Macros ----
+
+    private val macroRecorder by lazy { MacroRecorder(core, PORT) }
+    private val macroPlayer by lazy { MacroPlayer(core, PORT, lifecycleScope) }
+    private var macroList by mutableStateOf<List<Macro>>(emptyList())
+    private var macrosOpen by mutableStateOf(false)
+
+    /** Seconds the running recording has gone on, or -1 when none is. */
+    private var recordingSeconds by mutableLongStateOf(-1L)
+    private var recordingJob: Job? = null
+
+    private val overlayOpen get() = menuOpen || rewindOpen || cheatsOpen || macrosOpen
+
     /** Waits for the game's CRC, then gives the core its cheats. */
     private var cheatsJob: Job? = null
 
@@ -178,6 +197,8 @@ class EmulationActivity : ComponentActivity() {
                 menuOpen -> if (!stateBusy) closeMenu()
                 rewindOpen -> if (!stateBusy) closeRewind()
                 cheatsOpen -> closeCheats()
+                macrosOpen -> closeMacros()
+                recordingSeconds >= 0 -> stopRecording()
                 core.hasActiveVm -> openMenu()
                 // Still booting, or the boot failed: nothing to pause.
                 else -> exit()
@@ -230,13 +251,38 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
+                        macroButton = if (settings?.frameLimit?.macroButton == true && serial != null && recordingSeconds < 0) {
+                            {
+                                val playing by macroPlayer.playing.collectAsState()
+                                MacroButton(macroList, playing != null, macroActions)
+                            }
+                        } else {
+                            null
+                        },
                     )
+                    val playingMacro by macroPlayer.playing.collectAsState()
+                    if (recordingSeconds >= 0) {
+                        MacroStatus(
+                            stringResource(R.string.macro_recording, durationLabel(recordingSeconds * 1000)),
+                            onStop = ::stopRecording,
+                            recording = true,
+                        )
+                    } else if (playingMacro != null) {
+                        MacroStatus(
+                            stringResource(R.string.macro_playing, playingMacro?.name.orEmpty()),
+                            onStop = macroPlayer::stop,
+                            recording = false,
+                        )
+                    }
                     val current = settings
                     if (rewindOpen) {
                         RewindMenu(rewindSlots, rewindNow, stateBusy, ::rewindTo, ::closeRewind)
                     }
                     if (cheatsOpen) {
                         CheatsMenu(cheatList, ::toggleCheat, ::closeCheats)
+                    }
+                    if (macrosOpen) {
+                        MacrosMenu(macroList, macroActions, ::closeMacros)
                     }
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
@@ -245,6 +291,9 @@ class EmulationActivity : ComponentActivity() {
             }
         }
 
+        serial?.let { serial ->
+            lifecycleScope.launch { container.macroRepository.macros(serial).collect { macroList = it } }
+        }
         lifecycleScope.launch { boot(gameUri) }
     }
 
@@ -598,6 +647,103 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    private fun showMacros() {
+        macrosOpen = true
+    }
+
+    private fun closeMacros() {
+        macrosOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    /** Lets the game go, then records what is pressed until [stopRecording]. */
+    private fun startRecording() {
+        macroPlayer.stop()
+        macrosOpen = false
+        menuOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+        gamepad.releaseAll()
+        macroRecorder.start()
+        recordingSeconds = 0
+        val startedAt = SystemClock.elapsedRealtime()
+        recordingJob?.cancel()
+        recordingJob = lifecycleScope.launch {
+            while (isActive) {
+                delay(RECORDING_TICK_MS)
+                recordingSeconds = (SystemClock.elapsedRealtime() - startedAt) / 1000
+            }
+        }
+    }
+
+    private fun stopRecording() {
+        if (recordingSeconds < 0) return
+        recordingJob?.cancel()
+        recordingSeconds = -1
+        val serial = serial
+        val names = macroList.map { it.name }.toSet()
+        val name = generateSequence(macroList.size + 1) { it + 1 }
+            .map { getString(R.string.macro_default_name, it) }.first { it !in names }
+        val macro = macroRecorder.stop(UUID.randomUUID().toString(), name)
+        if (macro == null || serial == null) {
+            showMessage(getString(R.string.macro_nothing_recorded))
+            return
+        }
+        lifecycleScope.launch {
+            container.macroRepository.update(serial) { it + macro }
+            showMessage(getString(R.string.macro_saved, name))
+        }
+    }
+
+    private fun updateMacro(id: String, transform: (Macro) -> Macro?) {
+        val serial = serial ?: return
+        lifecycleScope.launch {
+            container.macroRepository.update(serial) { list ->
+                list.mapNotNull { if (it.id == id) transform(it) else it }
+            }
+        }
+    }
+
+    private val macroActions = object : MacroActions {
+        override fun play(macro: Macro) {
+            if (macrosOpen) closeMacros()
+            macroPlayer.play(macro)
+        }
+
+        override fun stop() = macroPlayer.stop()
+
+        override fun record() = startRecording()
+
+        override fun rename(macro: Macro, name: String) {
+            updateMacro(macro.id) { it.copy(name = name) }
+        }
+
+        override fun setLoop(macro: Macro, loop: Boolean) {
+            if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
+            updateMacro(macro.id) { it.copy(loop = loop) }
+        }
+
+        override fun delete(macro: Macro) {
+            if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
+            updateMacro(macro.id) { null }
+        }
+
+        override fun manage() {
+            // The game stays paused while the macros are up.
+            if (core.vmState.value == VmState.Running) {
+                core.pause()
+                pausedByMenu = true
+            }
+            gamepad.releaseAll()
+            showMacros()
+        }
+    }
+
     private fun closeMenu() {
         menuOpen = false
         if (pausedByMenu) {
@@ -639,6 +785,16 @@ class EmulationActivity : ComponentActivity() {
             // The core captures the next frame it presents, which a paused game never does.
             closeMenu()
             takeScreenshot()
+        }
+
+        override fun macros() {
+            // The game stays paused (by the menu) while the macros are up.
+            menuOpen = false
+            showMacros()
+        }
+
+        override fun setMacroButton(show: Boolean) = updateSetting("frameLimit.macroButton") {
+            it.copy(frameLimit = it.frameLimit.copy(macroButton = show))
         }
 
         override fun setScreenshotButton(show: Boolean) = updateSetting("frameLimit.screenshotButton") {
@@ -784,13 +940,13 @@ class EmulationActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // While the menu is open a controller navigates it: the D-pad moves focus, A clicks, B goes back.
-        if (menuOpen || rewindOpen || cheatsOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
+        if (overlayOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
         return gamepad.onKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         // Unhandled hat motion comes back as D-pad key events, which the menu navigates by.
-        if (menuOpen || rewindOpen || cheatsOpen) return super.dispatchGenericMotionEvent(event)
+        if (overlayOpen) return super.dispatchGenericMotionEvent(event)
         return gamepad.onMotionEvent(event) || super.dispatchGenericMotionEvent(event)
     }
 
@@ -816,6 +972,7 @@ class EmulationActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         rumble.stop()
+        stopRecording()
         if (emulationThread == null) return
         if (core.vmState.value == VmState.Running) {
             core.pause()
@@ -926,6 +1083,7 @@ class EmulationActivity : ComponentActivity() {
         private const val VM_STOP_WAIT_MS = 5_000L
         private const val VM_POLL_MS = 200L
         private const val CHEATS_POLL_MS = 500L
+        private const val RECORDING_TICK_MS = 250L
         private const val SUSPEND_SAVE_TRIES = 10
         private const val SUSPEND_SAVE_RETRY_MS = 250L
         private const val TOAST_VISIBLE_MS = 3_500L

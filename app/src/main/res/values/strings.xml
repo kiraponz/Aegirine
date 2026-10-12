@@ -74,6 +74,7 @@
     <string name="menu_exit_suspend">Exit and resume later</string>
     <string name="menu_show_fps">Show FPS</string>
     <string name="menu_fast_forward_button">Fast-forward button</string>
+    <string name="menu_macro_button">Macro button</string>
     <string name="menu_screenshot_button">Screenshot button</string>
     <string name="menu_fast_forward_speed">Fast-forward speed</string>
     <string name="menu_fast_forward_unlimited">Unlimited</string>
@@ -380,6 +381,8 @@
     <string name="settings_osd_cpu">CPU usage</string>
     <string name="settings_osd_gpu">GPU usage</string>
     <string name="settings_osd_frame_times">Frame time graph</string>
+    <string name="settings_macro_button">Macro button</string>
+    <string name="settings_macro_button_summary">Shows a button over the game to play, record and stop macros (recorded button presses) for a game</string>
     <string name="settings_screenshot_button">Screenshot button</string>
     <string name="settings_screenshot_button_summary">Shows a button over the game that saves a screenshot in one tap</string>
     <string name="settings_osd_messages">Notifications</string>
@@ -573,5 +576,28 @@
     <plurals name="cheats_code_lines">
         <item quantity="one">%1$d code line</item>
         <item quantity="other">%1$d code lines</item>
+    </plurals>
+
+    <string name="macro_title">Macros</string>
+    <string name="macro_record">Record new macro</string>
+    <string name="macro_manage">Manage macros</string>
+    <string name="macro_empty">No macros yet. Record one: everything you press until you stop is saved, and you can play it back any time.</string>
+    <string name="macro_stop">Stop macro</string>
+    <string name="macro_stop_recording">Stop recording</string>
+    <string name="macro_recording">Recording %1$s</string>
+    <string name="macro_playing">Playing %1$s</string>
+    <string name="macro_default_name">Macro %1$d</string>
+    <string name="macro_saved">Saved as %1$s</string>
+    <string name="macro_nothing_recorded">Nothing was pressed, so nothing was saved</string>
+    <string name="macro_actions">Macro actions</string>
+    <string name="macro_rename">Rename</string>
+    <string name="macro_delete">Delete</string>
+    <string name="macro_delete_title">Delete %1$s?</string>
+    <string name="macro_loop">Loop</string>
+    <string name="macro_loop_on">Play in a loop</string>
+    <string name="macro_loop_off">Play once</string>
+    <plurals name="macro_inputs">
+        <item quantity="one">%1$d input</item>
+        <item quantity="other">%1$d inputs</item>
     </plurals>
 </resources>

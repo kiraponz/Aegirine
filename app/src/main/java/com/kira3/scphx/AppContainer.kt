@@ -4,6 +4,7 @@ import android.content.Context
 import com.kira3.scphx.data.AppPreferences
 import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.CheatRepository
+import com.kira3.scphx.data.MacroRepository
 import com.kira3.scphx.data.DriverRepository
 import com.kira3.scphx.data.LibraryRepository
 import com.kira3.scphx.data.MemoryCardRepository
@@ -27,6 +28,7 @@ class AppContainer(context: Context) {
     }
     val memoryCardRepository: MemoryCardRepository by lazy { MemoryCardRepository(appContext, emulatorCore) }
     val cheatRepository: CheatRepository by lazy { CheatRepository(appContext) }
+    val macroRepository: MacroRepository by lazy { MacroRepository(appContext) }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
     val driverRepository: DriverRepository by lazy { DriverRepository(appContext) }
 }
