@@ -29,16 +29,20 @@ import kotlinx.coroutines.launch
 /** A game to start: what EmulationActivity needs from its Intent. */
 data class LaunchRequest(val gameUri: Uri, val serial: String?)
 
+/** A game whose settings to open. */
+data class GameSettingsRequest(val serial: String, val title: String)
+
 data class LibraryUiState(
     val bios: Bios? = null,
     val hasGameFolder: Boolean = false,
     /** Null while the folder is being scanned. */
     val games: List<GameFile>? = null,
     val launchRequest: LaunchRequest? = null,
+    val settingsRequest: GameSettingsRequest? = null,
     val message: LibraryMessage? = null,
 )
 
-enum class LibraryMessage { InvalidBios, ScanFailed, BiosRequired, CoreUnavailable }
+enum class LibraryMessage { InvalidBios, ScanFailed, BiosRequired, CoreUnavailable, NoSerial }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(
@@ -100,7 +104,24 @@ class LibraryViewModel(
         }
     }
 
+    fun onGameSettingsClicked(game: GameFile) {
+        viewModelScope.launch {
+            val serial = runCatching { libraryRepository.readSerial(game) }
+                .onFailure { Log.e(TAG, "Reading serial of ${game.name} failed", it) }
+            when {
+                serial.exceptionOrNull() is IllegalStateException -> showMessage(LibraryMessage.CoreUnavailable)
+                // Per-game settings are stored by serial.
+                serial.getOrNull() == null -> showMessage(LibraryMessage.NoSerial)
+                else -> transient.update {
+                    it.copy(settingsRequest = GameSettingsRequest(serial.getOrThrow()!!, game.name.substringBeforeLast('.')))
+                }
+            }
+        }
+    }
+
     fun onLaunchHandled() = transient.update { it.copy(launchRequest = null) }
+
+    fun onSettingsRequestHandled() = transient.update { it.copy(settingsRequest = null) }
 
     fun onMessageShown() = transient.update { it.copy(message = null) }
 

@@ -50,6 +50,14 @@ class BiosRepository(
         Bios(name, metadata)
     }
 
+    /** Every valid BIOS in the BIOS folder, by file name. */
+    suspend fun installed(): List<Bios> = withContext(Dispatchers.IO) {
+        core.biosDir.listFiles().orEmpty()
+            .filter { it.isFile && !it.name.endsWith(".tmp") }
+            .sortedBy { it.name.lowercase() }
+            .mapNotNull { readInstalled(it.name) }
+    }
+
     private suspend fun readInstalled(name: String): Bios? {
         val file = File(core.biosDir, name)
         if (!file.isFile) return null

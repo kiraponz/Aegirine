@@ -1,0 +1,121 @@
+package com.kira3.scphx.ui.settings
+
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.kira3.scphx.R
+import com.kira3.scphx.emucore.settings.SettingsEffects
+import com.kira3.scphx.emucore.settings.SettingsValues
+
+// The settings screens are described as data: each category is a list of sections, each
+// section a list of settings addressed by their dotted path in EmulatorSettings. The rows
+// are drawn from this in SettingsRows.kt.
+
+enum class SettingsCategory(
+    @StringRes val title: Int,
+    @StringRes val summary: Int,
+    @DrawableRes val icon: Int,
+) {
+    Graphics(R.string.settings_graphics, R.string.settings_graphics_summary, R.drawable.ic_palette),
+    Performance(R.string.settings_performance, R.string.settings_performance_summary, R.drawable.ic_speed),
+    Audio(R.string.settings_audio, R.string.settings_audio_summary, R.drawable.ic_volume_up),
+    System(R.string.settings_system, R.string.settings_system_summary, R.drawable.ic_memory),
+    Advanced(R.string.settings_advanced, R.string.settings_advanced_summary, R.drawable.ic_build);
+
+    val sections: List<SettingsSection> get() = SettingsCatalog.sections(this)
+
+    /** Every path this category edits, for counting and resetting a game's overrides. */
+    val paths: Set<String> by lazy { sections.flatMap { s -> s.settings.mapNotNull { it.path } }.toSet() }
+}
+
+/** [advanced] sections stay folded away until the user asks for them. */
+class SettingsSection(
+    @StringRes val title: Int,
+    val settings: List<Setting>,
+    val advanced: Boolean = false,
+)
+
+/** Text for a value: a string resource, or text that needs no translation ("16:9"). */
+class Label private constructor(@StringRes private val res: Int, private val text: String?) {
+    @Composable
+    fun resolve(): String = text ?: stringResource(res)
+
+    companion object {
+        fun res(@StringRes res: Int) = Label(res, null)
+        fun text(text: String) = Label(0, text)
+    }
+}
+
+class Option(val value: Any, val label: Label)
+
+sealed class Setting(
+    /** Dotted path of the value this row edits, or null for a row that edits several. */
+    val path: String?,
+    @StringRes val title: Int,
+    @StringRes val summary: Int,
+    /** Hides the row unless this is true for the current values. */
+    val visibleWhen: ((SettingsValues) -> Boolean)?,
+    /** Disables the row unless this is true for the current values. */
+    val enabledWhen: ((SettingsValues) -> Boolean)?,
+    /** Shown only in a game's settings. */
+    val gameOnly: Boolean = false,
+) {
+    val appliesOnNextBoot: Boolean get() = path in SettingsEffects.appliesOnNextBoot
+}
+
+/** A switch. [on] and [off] are the stored values, for settings that are not Booleans. */
+class Toggle(
+    path: String,
+    @StringRes title: Int,
+    @StringRes summary: Int = 0,
+    val on: Any = true,
+    val off: Any = false,
+    visibleWhen: ((SettingsValues) -> Boolean)? = null,
+    enabledWhen: ((SettingsValues) -> Boolean)? = null,
+) : Setting(path, title, summary, visibleWhen, enabledWhen)
+
+/** One of [options]: as connected buttons in the row when [inline], else in a dialog. */
+class Choice(
+    path: String,
+    @StringRes title: Int,
+    @StringRes summary: Int = 0,
+    val options: List<Option>,
+    val inline: Boolean = false,
+    visibleWhen: ((SettingsValues) -> Boolean)? = null,
+    enabledWhen: ((SettingsValues) -> Boolean)? = null,
+    gameOnly: Boolean = false,
+) : Setting(path, title, summary, visibleWhen, enabledWhen, gameOnly)
+
+/** A whole number on a slider. [labels] replace the plain number for some values; [unit] formats the rest. */
+class Slider(
+    path: String,
+    @StringRes title: Int,
+    @StringRes summary: Int = 0,
+    val range: IntRange,
+    val step: Int = 1,
+    @StringRes val unit: Int = 0,
+    val labels: Map<Int, Label> = emptyMap(),
+    visibleWhen: ((SettingsValues) -> Boolean)? = null,
+    enabledWhen: ((SettingsValues) -> Boolean)? = null,
+) : Setting(path, title, summary, visibleWhen, enabledWhen)
+
+/** A number typed into a dialog. [decimal] allows fractions (Float settings). */
+class NumberInput(
+    path: String,
+    @StringRes title: Int,
+    @StringRes summary: Int = 0,
+    val min: Double,
+    val max: Double,
+    val decimal: Boolean = false,
+    visibleWhen: ((SettingsValues) -> Boolean)? = null,
+    enabledWhen: ((SettingsValues) -> Boolean)? = null,
+) : Setting(path, title, summary, visibleWhen, enabledWhen)
+
+/** The performance presets, which rewrite several settings at once. */
+data object PresetSetting : Setting(null, R.string.settings_preset, R.string.settings_preset_summary, null, null)
+
+/** The BIOS a game boots with; the options are the installed BIOS files. */
+data object GameBiosSetting : Setting(
+    "system.biosFilename", R.string.settings_game_bios, R.string.settings_game_bios_summary, null, null, gameOnly = true,
+)

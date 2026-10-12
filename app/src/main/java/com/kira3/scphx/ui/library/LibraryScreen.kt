@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,7 @@ import com.kira3.scphx.ui.theme.ScphxTheme
 @Composable
 fun LibraryScreen(
     onOpenSettings: () -> Unit,
+    onOpenGameSettings: (serial: String, title: String) -> Unit,
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -63,6 +65,12 @@ fun LibraryScreen(
         viewModel.onLaunchHandled()
     }
 
+    LaunchedEffect(state.settingsRequest) {
+        val request = state.settingsRequest ?: return@LaunchedEffect
+        onOpenGameSettings(request.serial, request.title)
+        viewModel.onSettingsRequestHandled()
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val messageText = state.message?.let { stringResource(it.textRes) }
     LaunchedEffect(state.message) {
@@ -79,6 +87,7 @@ fun LibraryScreen(
         onPickBios = { pickBios.launch(arrayOf("*/*")) },
         onPickGameFolder = { pickGameFolder.launch(null) },
         onGameClick = viewModel::onGameClicked,
+        onGameSettingsClick = viewModel::onGameSettingsClicked,
     )
 }
 
@@ -88,6 +97,7 @@ private val LibraryMessage.textRes: Int
         LibraryMessage.ScanFailed -> R.string.library_message_scan_failed
         LibraryMessage.BiosRequired -> R.string.library_message_bios_required
         LibraryMessage.CoreUnavailable -> R.string.library_message_core_unavailable
+        LibraryMessage.NoSerial -> R.string.library_message_no_serial
     }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,6 +109,7 @@ private fun LibraryContent(
     onPickBios: () -> Unit,
     onPickGameFolder: () -> Unit,
     onGameClick: (GameFile) -> Unit,
+    onGameSettingsClick: (GameFile) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -174,6 +185,14 @@ private fun LibraryContent(
                 else -> items(games, key = { it.uri.toString() }) { game ->
                     ListItem(
                         headlineContent = { Text(game.name) },
+                        trailingContent = {
+                            IconButton(onClick = { onGameSettingsClick(game) }) {
+                                Icon(
+                                    painterResource(R.drawable.ic_tune),
+                                    contentDescription = stringResource(R.string.library_game_settings),
+                                )
+                            }
+                        },
                         modifier = Modifier.clickable { onGameClick(game) },
                     )
                 }
@@ -196,6 +215,7 @@ private fun LibraryContentPreview() {
             onPickBios = {},
             onPickGameFolder = {},
             onGameClick = {},
+            onGameSettingsClick = {},
         )
     }
 }

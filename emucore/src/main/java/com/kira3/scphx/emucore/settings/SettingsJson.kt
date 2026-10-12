@@ -51,6 +51,10 @@ object SettingsJson {
         return overlay(encode(into), picked)
     }
 
+    /** [settings] with the value at [path] replaced. A value of the wrong type is ignored. */
+    internal fun withValue(settings: EmulatorSettings, path: String, value: JsonPrimitive): EmulatorSettings =
+        overlay(encode(settings), JsonObject(emptyMap()).withValue(path.split('.'), value))
+
     private fun overlay(base: JsonObject, top: JsonObject): EmulatorSettings =
         json.decodeFromJsonElement(overlayJson(base, top))
 
@@ -123,7 +127,7 @@ class SettingsOverrides(val json: JsonObject = JsonObject(emptyMap())) {
     }
 }
 
-private fun JsonObject.valueAt(path: String): JsonElement =
+internal fun JsonObject.valueAt(path: String): JsonElement =
     path.split('.').fold(this as JsonElement) { element, key -> element.jsonObject.getValue(key) }
 
 private fun JsonObject.withValue(keys: List<String>, value: JsonElement): JsonObject {
