@@ -84,6 +84,7 @@ internal object CoreKeys {
         fun write(s: EmulatorSettings) {
             writeCpu(s)
             writeFrameLimit(s.frameLimit)
+            writeRewind(s.rewind)
             writeAudio(s.audio)
             writeEmuCore(s.emuCore)
             writeSystem(s.system)
@@ -140,6 +141,13 @@ internal object CoreKeys {
             g.bool(::frameLimitEnable, "EmuCore/GS", "FrameLimitEnable")
             put("Framerate", "NominalScalar", "float", (nominalSpeedPercent.coerceIn(10, 1000) / 100f).toString(),
                 setOf(g.path(::nominalSpeedPercent)))
+        }
+
+        private fun writeRewind(r: RewindSettings) = with(r) {
+            val g = group(EmulatorSettings::rewind.name)
+            put("EmuCore", "AutosaveIntervalMinutes", "int", (if (enabled) intervalMinutes.coerceIn(1, 10) else 0).toString(),
+                setOf(g.path(::enabled), g.path(::intervalMinutes)))
+            g.int(::keep, "EmuCore", "AutosaveKeep", 1..5)
         }
 
         private fun writeAudio(a: AudioSettings) = with(a) {

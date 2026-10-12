@@ -27,6 +27,7 @@ data class EmulatorSettings(
     val system: SystemSettings = SystemSettings(),
     val graphics: GraphicsSettings = GraphicsSettings(),
     val osd: OsdSettings = OsdSettings(),
+    val rewind: RewindSettings = RewindSettings(),
 ) {
     val effectiveVu1ClampMode: Int get() = if (cpu.vu1ClampMode < 0) cpu.vuClampMode else cpu.vu1ClampMode
 }
@@ -79,6 +80,17 @@ data class CpuSettings(
     val vu1CrossBlockPState: Boolean = false,
     val vu1InlineDrainTestPipes: Boolean = false,
     val vu1FmacInstanceRouting: Boolean = false,
+)
+
+/** Rewind: the core's autosaves, kept as a short history the player can go back to. */
+@Serializable
+data class RewindSettings(
+    /** Off by default: each autosave stalls the game for a moment. EmuCore/AutosaveIntervalMinutes is 0 when off. */
+    val enabled: Boolean = false,
+    /** EmuCore/AutosaveIntervalMinutes: minutes of play between saves (1..10). */
+    val intervalMinutes: Int = 1,
+    /** EmuCore/AutosaveKeep: how many saves to keep (1..5). */
+    val keep: Int = 5,
 )
 
 /** Frame limiter and speed target. */

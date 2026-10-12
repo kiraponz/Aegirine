@@ -68,6 +68,7 @@ fun TouchPad(
     onShowRequest: () -> Unit,
     modifier: Modifier = Modifier,
     fastForwardButton: (@Composable () -> Unit)? = null,
+    rewindButton: (@Composable () -> Unit)? = null,
 ) {
     val view = LocalView.current
     val tracker = remember(sink) {
@@ -123,6 +124,9 @@ fun TouchPad(
         }
         if (fastForwardButton != null) {
             Box(Modifier.centeredAt(layout.fastForward)) { fastForwardButton() }
+        }
+        if (rewindButton != null) {
+            Box(Modifier.centeredAt(layout.rewind)) { rewindButton() }
         }
     }
 }

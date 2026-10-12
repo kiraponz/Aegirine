@@ -366,6 +366,25 @@ class EmulatorCore(context: Context) {
     /** Makes the next [runVm] start from the save state at [file], or from the beginning for null. */
     fun setBootSaveState(file: File?) = NativeApp.setBootSaveState(file?.absolutePath.orEmpty())
 
+    /**
+     * The autosaves the core has written for the running game, newest first: what rewind goes
+     * back to. [SaveStateInfo.slot] is the place in that history. Blocking I/O.
+     */
+    fun rewindPoints(): List<SaveStateInfo> = (1..REWIND_POINTS_MAX).mapNotNull { n ->
+        val file = NativeApp.getAutosavePathAt(n)?.let(::File)?.takeIf { it.isFile } ?: return@mapNotNull null
+        SaveStateInfo(n, file.lastModified(), NativeApp.getAutosaveImageAt(n))
+    }
+
+    /** Goes back to the rewind point [n] (see [rewindPoints]). */
+    fun rewindTo(n: Int): Boolean = NativeApp.loadAutosaveStateAt(n)
+
+    /** Deletes the autosaves a game left, so rewind only offers what happened since it started. Blocking I/O. */
+    fun clearRewindPoints(serial: String) {
+        File(dataDir, SAVE_STATE_DIR).listFiles { file ->
+            file.name.startsWith("$serial (") && ".autosave" in file.name
+        }?.forEach { it.delete() }
+    }
+
     /** True while the memory card is being written; a save state is refused then. */
     val isMemcardBusy: Boolean get() = NativeApp.isMemcardBusy()
 
@@ -442,6 +461,7 @@ class EmulatorCore(context: Context) {
         /** The core's resume state, which it keeps apart from the numbered slots. */
         private const val SUSPEND_SLOT = -1
         private const val SAVE_STATE_DIR = "sstates"
+        private const val REWIND_POINTS_MAX = 5
 
         private const val TAG = "EmulatorCore"
         private const val PAD_RANGE_MAX = 32767

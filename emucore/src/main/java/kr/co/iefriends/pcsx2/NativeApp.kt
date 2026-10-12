@@ -154,6 +154,10 @@ internal object NativeApp {
     // ---- Save states ----
 
     @JvmStatic external fun saveStateToSlot(slot: Int): Boolean
+    /** The core's autosaves, [n] = 1 (newest) to 5. */
+    @JvmStatic external fun getAutosavePathAt(n: Int): String?
+    @JvmStatic external fun getAutosaveImageAt(n: Int): ByteArray?
+    @JvmStatic external fun loadAutosaveStateAt(n: Int): Boolean
     @JvmStatic external fun loadStateFromSlot(slot: Int): Boolean
     @JvmStatic external fun isMemcardBusy(): Boolean
     @JvmStatic external fun getGamePathSlot(slot: Int): String?

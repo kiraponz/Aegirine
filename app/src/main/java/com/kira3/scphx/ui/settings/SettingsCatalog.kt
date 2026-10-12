@@ -393,6 +393,21 @@ object SettingsCatalog {
             ),
         ),
         SettingsSection(
+            R.string.settings_section_rewind,
+            listOf(
+                Toggle("rewind.enabled", R.string.settings_rewind, R.string.settings_rewind_summary),
+                Slider(
+                    "rewind.intervalMinutes", R.string.settings_rewind_interval,
+                    range = 1..10, unit = R.string.settings_unit_minutes,
+                    enabledWhen = { it.boolean("rewind.enabled") },
+                ),
+                Slider(
+                    "rewind.keep", R.string.settings_rewind_keep,
+                    range = 1..5, enabledWhen = { it.boolean("rewind.enabled") },
+                ),
+            ),
+        ),
+        SettingsSection(
             R.string.settings_section_patches,
             listOf(
                 Toggle("emuCore.enablePatches", R.string.settings_compat_patches, R.string.settings_compat_patches_summary),

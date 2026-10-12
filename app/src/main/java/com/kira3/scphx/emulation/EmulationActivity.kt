@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -132,6 +133,10 @@ class EmulationActivity : ComponentActivity() {
     /** A save or load is running. */
     private var stateBusy by mutableStateOf(false)
 
+    private var rewindOpen by mutableStateOf(false)
+    private var rewindSlots by mutableStateOf<List<SaveSlot>?>(null)
+    private var rewindNow by mutableLongStateOf(0L)
+
     /** Set by Reset: when the VM stops, boot the game again instead of finishing. */
     private var restartRequested = false
 
@@ -163,6 +168,7 @@ class EmulationActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) {
             when {
                 menuOpen -> if (!stateBusy) closeMenu()
+                rewindOpen -> if (!stateBusy) closeRewind()
                 core.hasActiveVm -> openMenu()
                 // Still booting, or the boot failed: nothing to pause.
                 else -> exit()
@@ -201,8 +207,16 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
+                        rewindButton = if (settings?.rewind?.enabled == true && serial != null) {
+                            { RewindButton(onClick = ::openRewind) }
+                        } else {
+                            null
+                        },
                     )
                     val current = settings
+                    if (rewindOpen) {
+                        RewindMenu(rewindSlots, rewindNow, stateBusy, ::rewindTo, ::closeRewind)
+                    }
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
                     }
@@ -261,6 +275,7 @@ class EmulationActivity : ComponentActivity() {
         val suspended = serial?.takeIf { resume }?.let { withContext(Dispatchers.IO) { core.suspendStateFile(it) } }
         suspendFile = suspended
         core.setBootSaveState(suspended)
+        serial?.let { withContext(Dispatchers.IO) { core.clearRewindPoints(it) } }
         // The hold would press into the game that was restored, not one that is starting.
         if (suspended == null && SettingsJson.merge(global, overrides).output.autoProgressiveScan) {
             startAutoProgressiveScanHold()
@@ -450,6 +465,53 @@ class EmulationActivity : ComponentActivity() {
         lifecycleScope.launch { saveSlots = readSaveSlots() }
     }
 
+    /** Opens the rewind menu over a paused game, from the button over the game. */
+    private fun openRewind() {
+        if (menuOpen || rewindOpen || stateBusy) return
+        gamepad.releaseAll()
+        if (core.vmState.value == VmState.Running) {
+            core.pause()
+            pausedByMenu = true
+        }
+        showRewind()
+    }
+
+    private fun showRewind() {
+        rewindOpen = true
+        rewindSlots = null
+        rewindNow = System.currentTimeMillis()
+        lifecycleScope.launch {
+            rewindSlots = withContext(Dispatchers.IO) { core.rewindPoints() }.map { point ->
+                val thumbnail = point.screenshot?.let { png ->
+                    BitmapFactory.decodeByteArray(png, 0, png.size)?.asImageBitmap()
+                }
+                SaveSlot(point.slot, point.savedAt, thumbnail)
+            }
+        }
+    }
+
+    private fun closeRewind() {
+        rewindOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    /** Goes back to the rewind point [n], then returns to the game. */
+    private fun rewindTo(n: Int) {
+        stateBusy = true
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) { core.rewindTo(n) }
+            stateBusy = false
+            when {
+                ok -> closeRewind()
+                core.isMemcardBusy -> showMessage(getString(R.string.emulation_state_memcard_busy))
+                else -> showMessage(getString(R.string.rewind_failed))
+            }
+        }
+    }
+
     private fun closeMenu() {
         menuOpen = false
         if (pausedByMenu) {
@@ -507,6 +569,12 @@ class EmulationActivity : ComponentActivity() {
             menuOpen = false
             pausedByMenu = false
             this@EmulationActivity.exit()
+        }
+
+        override fun rewind() {
+            // The game stays paused (by the menu) while the rewind menu is up.
+            menuOpen = false
+            showRewind()
         }
 
         override fun exitAndResumeLater() {
@@ -623,13 +691,13 @@ class EmulationActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // While the menu is open a controller navigates it: the D-pad moves focus, A clicks, B goes back.
-        if (menuOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
+        if (menuOpen || rewindOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
         return gamepad.onKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         // Unhandled hat motion comes back as D-pad key events, which the menu navigates by.
-        if (menuOpen) return super.dispatchGenericMotionEvent(event)
+        if (menuOpen || rewindOpen) return super.dispatchGenericMotionEvent(event)
         return gamepad.onMotionEvent(event) || super.dispatchGenericMotionEvent(event)
     }
 
