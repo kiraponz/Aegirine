@@ -123,6 +123,7 @@ internal object NativeApp {
 
     /** The save state the next [runVMThread] boots into; empty for none. Patch 0004. */
     @JvmStatic external fun setBootSaveState(path: String)
+    @JvmStatic external fun createMemoryCard(name: String, type: Int, fileType: Int): Boolean
     @JvmStatic external fun pause()
     @JvmStatic external fun resume()
     @JvmStatic external fun shutdown()

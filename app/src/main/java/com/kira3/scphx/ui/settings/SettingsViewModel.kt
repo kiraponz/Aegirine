@@ -12,6 +12,8 @@ import com.kira3.scphx.data.Bios
 import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.DriverRepository
 import com.kira3.scphx.data.GpuDriver
+import com.kira3.scphx.data.MemoryCard
+import com.kira3.scphx.data.MemoryCardRepository
 import com.kira3.scphx.data.SettingsRepository
 import com.kira3.scphx.emucore.settings.EmulatorSettings
 import com.kira3.scphx.emucore.settings.PerformancePreset
@@ -34,6 +36,8 @@ data class SettingsUiState(
     val overrides: Set<String>,
     /** Installed BIOS files, for a game's BIOS choice. */
     val bioses: List<Bios>,
+    /** The memory cards the app holds, for the slots' choices. */
+    val cards: List<MemoryCard>,
     /** Installed custom Vulkan drivers. */
     val drivers: List<GpuDriver>,
     /** A driver pack is being installed. */
@@ -48,6 +52,7 @@ class SettingsViewModel(
     private val serial: String?,
     private val settingsRepository: SettingsRepository,
     biosRepository: BiosRepository,
+    memoryCardRepository: MemoryCardRepository,
     private val driverRepository: DriverRepository,
 ) : ViewModel() {
     private val installing = MutableStateFlow(false)
@@ -72,10 +77,11 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState?> = combine(
         settings,
         bioses,
+        memoryCardRepository.cards.catch { emit(emptyList()) },
         driverRepository.installed.catch { emit(emptyList()) },
         installing,
-    ) { (values, overrides), bioses, drivers, installing ->
-        SettingsUiState(values, overrides, bioses, drivers, installing)
+    ) { (values, overrides), bioses, cards, drivers, installing ->
+        SettingsUiState(values, overrides, bioses, cards, drivers, installing)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun set(path: String, value: Any) = edit { SettingsValues(it).with(path, value) }
@@ -135,7 +141,7 @@ class SettingsViewModel(
         fun factory(serial: String?): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val container = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as ScphxApplication).container
-                SettingsViewModel(serial, container.settingsRepository, container.biosRepository, container.driverRepository)
+                SettingsViewModel(serial, container.settingsRepository, container.biosRepository, container.memoryCardRepository, container.driverRepository)
             }
         }
     }

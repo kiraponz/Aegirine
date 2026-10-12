@@ -14,6 +14,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.kira3.scphx.ui.bios.BiosScreen
+import com.kira3.scphx.ui.memcards.MemoryCardsScreen
 import com.kira3.scphx.ui.library.LibraryScreen
 import com.kira3.scphx.ui.settings.CheatGamesScreen
 import com.kira3.scphx.ui.settings.CheatsScreen
@@ -36,7 +37,7 @@ fun ScphxApp() {
     // Beside the settings list, opening something replaces what is open in the detail pane.
     fun openDetail(route: NavKey) {
         val last = backStack.lastOrNull()
-        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is CheatsRoute || last is CheatGamesRoute) {
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is CheatsRoute || last is CheatGamesRoute) {
             while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
         }
         backStack.add(route)
@@ -69,6 +70,11 @@ fun ScphxApp() {
                 metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
             ) {
                 BiosScreen(onBack = { backStack.removeLastOrNull() })
+            }
+            entry<MemoryCardsRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
+                MemoryCardsScreen(onBack = { backStack.removeLastOrNull() })
             }
             entry<SettingsRoute>(
                 metadata = { route ->
@@ -104,6 +110,7 @@ fun ScphxApp() {
                     gameTitle = route.gameTitle,
                     onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
                     onOpenBios = { openDetail(BiosRoute) },
+                    onOpenMemoryCards = { openDetail(MemoryCardsRoute) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }
@@ -117,6 +124,7 @@ fun ScphxApp() {
                     gameTitle = route.gameTitle,
                     onOpenGpuDriver = { backStack.add(GpuDriverRoute(route.serial, route.gameTitle)) },
                     onOpenBios = { openDetail(BiosRoute) },
+                    onOpenMemoryCards = { openDetail(MemoryCardsRoute) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }

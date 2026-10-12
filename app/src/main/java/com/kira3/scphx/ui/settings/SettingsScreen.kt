@@ -226,6 +226,7 @@ fun SettingsCategoryScreen(
     gameTitle: String?,
     onOpenGpuDriver: () -> Unit,
     onOpenBios: () -> Unit,
+    onOpenMemoryCards: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(serial)),
 ) {
@@ -238,13 +239,14 @@ fun SettingsCategoryScreen(
     val twoPane = LocalListDetailSceneScope.current != null
     val overridden = state?.overrides.orEmpty().filter { it in category.paths }
 
-    val actions = remember(viewModel, onOpenGpuDriver, onOpenBios) {
+    val actions = remember(viewModel, onOpenGpuDriver, onOpenBios, onOpenMemoryCards) {
         object : SettingsActions {
             override fun set(path: String, value: Any) = viewModel.set(path, value)
             override fun applyPreset(preset: PerformancePreset) = viewModel.applyPreset(preset)
             override fun reset(path: String) = viewModel.reset(listOf(path))
             override fun openGpuDriver() = onOpenGpuDriver()
             override fun openBios() = onOpenBios()
+            override fun openMemoryCards() = onOpenMemoryCards()
         }
     }
 

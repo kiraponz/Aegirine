@@ -417,6 +417,16 @@ object SettingsCatalog {
             ),
         ),
         SettingsSection(
+            R.string.settings_section_memory_cards,
+            listOf(
+                Toggle("system.memoryCardSlot1Enabled", R.string.settings_mc_slot1_enabled),
+                MemoryCardSlotSetting("system.memoryCardSlot1Filename", R.string.settings_mc_slot1) { it.boolean("system.memoryCardSlot1Enabled") },
+                Toggle("system.memoryCardSlot2Enabled", R.string.settings_mc_slot2_enabled),
+                MemoryCardSlotSetting("system.memoryCardSlot2Filename", R.string.settings_mc_slot2) { it.boolean("system.memoryCardSlot2Enabled") },
+                MemoryCardsManageSetting,
+            ),
+        ),
+        SettingsSection(
             R.string.settings_section_rewind,
             listOf(
                 Toggle("rewind.enabled", R.string.settings_rewind, R.string.settings_rewind_summary),

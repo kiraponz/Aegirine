@@ -138,3 +138,15 @@ data object BiosManageSetting : Setting(
 data object ControllersSetting : Setting(
     null, R.string.settings_controllers, 0, null, null, globalOnly = true,
 )
+
+/** The card in a memory card slot, chosen from the cards the app holds. */
+class MemoryCardSlotSetting(
+    path: String,
+    @StringRes title: Int,
+    enabledWhen: ((SettingsValues) -> Boolean)? = null,
+) : Setting(path, title, 0, null, enabledWhen)
+
+/** The memory cards the app holds, managed on their own screen. */
+data object MemoryCardsManageSetting : Setting(
+    null, R.string.settings_memory_cards_manage, R.string.settings_memory_cards_manage_summary, null, null, globalOnly = true,
+)

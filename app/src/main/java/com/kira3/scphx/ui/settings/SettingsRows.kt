@@ -70,6 +70,7 @@ interface SettingsActions {
     fun reset(path: String)
     fun openGpuDriver()
     fun openBios()
+    fun openMemoryCards()
 }
 
 /** One setting as a segmented list item. [shapes] places it within its section's group. */
@@ -102,6 +103,8 @@ fun SettingRow(
         GpuDriverSetting -> GpuDriverRow(row, state, actions)
         BiosManageSetting -> BiosManageRow(row, actions)
         ControllersSetting -> ControllersRow(row)
+        MemoryCardsManageSetting -> MemoryCardsManageRow(row, actions)
+        is MemoryCardSlotSetting -> DialogChoiceRow(row, cardChoice(setting, state, values), actions)
     }
 }
 
@@ -123,6 +126,35 @@ private fun biosChoice(state: SettingsUiState): Choice = Choice(
         state.bioses.map { Option(it.fileName, Label.text("${it.metadata.description} (${it.fileName})")) },
     gameOnly = true,
 )
+
+@Composable
+private fun cardChoice(setting: MemoryCardSlotSetting, state: SettingsUiState, values: SettingsValues): Choice {
+    val current = values.string(setting.path!!)
+    // The file system ignores case, so a stored "mcd001.ps2" is the card "Mcd001.ps2": keep the stored
+    // spelling as the value so that card shows as selected.
+    val options = state.cards.map { card ->
+        Option(if (card.name.equals(current, ignoreCase = true)) current else card.name, Label.text(card.name))
+    }
+    // The card in use is offered even if its file does not exist yet: the core creates it on first use.
+    val all = if (current.isEmpty() || options.any { it.value == current }) options else options + Option(current, Label.text(current))
+    return Choice(
+        setting.path, setting.title, 0,
+        options = all,
+        visibleWhen = setting.visibleWhen, enabledWhen = setting.enabledWhen,
+    )
+}
+
+@Composable
+private fun MemoryCardsManageRow(row: RowParams, actions: SettingsActions) {
+    SegmentedListItem(
+        onClick = actions::openMemoryCards,
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+        supportingContent = { Supporting(MemoryCardsManageSetting) },
+    ) { Text(stringResource(MemoryCardsManageSetting.title)) }
+}
 
 @Composable
 private fun ControllersRow(row: RowParams) {

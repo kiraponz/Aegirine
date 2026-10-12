@@ -201,10 +201,10 @@ internal object CoreKeys {
         private fun writeSystem(s: SystemSettings) = with(s) {
             val g = group(EmulatorSettings::system.name)
             g.bool(::memoryCardSlot1Enabled, "MemoryCards", "Slot1_Enable")
-            put("MemoryCards", "Slot1_Filename", "string", memoryCardSlot1Filename.ifEmpty { "mcd001.ps2" },
+            put("MemoryCards", "Slot1_Filename", "string", memoryCardSlot1Filename.ifEmpty { "Mcd001.ps2" },
                 setOf(g.path(::memoryCardSlot1Filename)))
             g.bool(::memoryCardSlot2Enabled, "MemoryCards", "Slot2_Enable")
-            put("MemoryCards", "Slot2_Filename", "string", memoryCardSlot2Filename.ifEmpty { "mcd002.ps2" },
+            put("MemoryCards", "Slot2_Filename", "string", memoryCardSlot2Filename.ifEmpty { "Mcd002.ps2" },
                 setOf(g.path(::memoryCardSlot2Filename)))
             // biosFilename is resolved by the app and written with the global BIOS choice.
         }

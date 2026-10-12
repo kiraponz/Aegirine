@@ -44,6 +44,9 @@ class EmulatorCore(context: Context) {
      */
     val biosDir: File = File(dataDir, "bios")
 
+    /** Where the core keeps its memory cards. */
+    val memoryCardsDir: File = File(dataDir, "memcards")
+
     /** Null when the native core loaded; otherwise a reason it cannot run on this device. */
     val unavailableReason: String? get() = NativeApp.loadError
 
@@ -254,6 +257,23 @@ class EmulatorCore(context: Context) {
     }
 
     // ---- BIOS and games ----
+
+    /**
+     * Creates the empty card [name] in [memoryCardsDir]: a folder card, or a file card of [sizeMb]
+     * (8, 16, 32 or 64). Needs [initialize]. Blocking I/O.
+     */
+    fun createMemoryCard(name: String, folder: Boolean, sizeMb: Int): Boolean {
+        // A folder card has no size; the core ignores the file type for it.
+        val fileType = when {
+            folder -> 1
+            sizeMb == 8 -> 1
+            sizeMb == 16 -> 2
+            sizeMb == 32 -> 3
+            sizeMb == 64 -> 4
+            else -> return false
+        }
+        return NativeApp.createMemoryCard(name, if (folder) 2 else 1, fileType)
+    }
 
     /** Reads BIOS metadata from [uri], or null if it is not a PS2 BIOS. Blocking I/O. */
     fun readBiosMetadata(uri: Uri): BiosMetadata? {

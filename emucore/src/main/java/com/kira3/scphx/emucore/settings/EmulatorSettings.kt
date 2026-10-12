@@ -392,11 +392,11 @@ data class SystemSettings(
     /** MemoryCards/Slot1_Enable. */
     val memoryCardSlot1Enabled: Boolean = true,
     /** MemoryCards/Slot1_Filename. */
-    val memoryCardSlot1Filename: String = "mcd001.ps2",
+    val memoryCardSlot1Filename: String = "Mcd001.ps2",
     /** MemoryCards/Slot2_Enable. */
     val memoryCardSlot2Enabled: Boolean = true,
     /** MemoryCards/Slot2_Filename. */
-    val memoryCardSlot2Filename: String = "mcd002.ps2",
+    val memoryCardSlot2Filename: String = "Mcd002.ps2",
     /** BIOS file (in the BIOS folder) for this game, or "" for the one chosen in BIOS settings. */
     val biosFilename: String = "",
 )
