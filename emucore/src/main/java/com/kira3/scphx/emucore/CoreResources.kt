@@ -13,13 +13,42 @@ import java.io.IOException
  * The copy runs only when this install has not written them yet: a marker file records the
  * install that did, and is written after a clean pass, so a failed copy is retried at the
  * next launch.
+ *
+ * The same rule clears the GPU caches in `<dataDir>/cache`, which are regenerated on demand.
+ * The core's own caches discard themselves on a build or driver mismatch; this is the second
+ * line for anything an older build wrote before it stamped them.
  */
 internal object CoreResources {
     private const val TAG = "CoreResources"
     private const val ASSET_ROOT = "resources"
+    private const val CACHE_DIR = "cache"
     private const val MARKER = ".install"
 
     fun install(context: Context, dataDir: File) {
+        clearGpuCache(context, File(dataDir, CACHE_DIR))
+        installResources(context, dataDir)
+    }
+
+    /**
+     * Drops the GPU caches on the first launch of a new install. The marker sits beside them, so
+     * a data folder that moved is cleared where it now is, and it is written only after a clean
+     * wipe, so a failed one is retried at the next launch.
+     */
+    private fun clearGpuCache(context: Context, cacheDir: File) {
+        val marker = File(cacheDir, MARKER)
+        val install = installId(context)
+        if (runCatching { marker.readText() }.getOrNull() == install) return
+
+        val wiped = !cacheDir.exists() || cacheDir.deleteRecursively()
+        if (wiped && cacheDir.mkdirs()) {
+            marker.writeText(install)
+            Log.i(TAG, "New install: cleared the GPU cache")
+        } else {
+            Log.w(TAG, "New install: could not clear ${cacheDir.path}; will retry next launch")
+        }
+    }
+
+    private fun installResources(context: Context, dataDir: File) {
         val target = File(dataDir, ASSET_ROOT)
         val marker = File(target, MARKER)
         val install = installId(context)
