@@ -1,0 +1,15 @@
+diff --git a/pcsx2/ImGui/ImGuiManager.cpp b/pcsx2/ImGui/ImGuiManager.cpp
+index e5e3991..2c894fe 100644
+--- a/pcsx2/ImGui/ImGuiManager.cpp
++++ b/pcsx2/ImGui/ImGuiManager.cpp
+@@ -457,6 +457,10 @@ void ImGuiManager::SetStyle()
+ 	style.ScrollbarRounding = 5.0f;
+ 
+ 	style.ScaleAllSizes(s_global_scale);
++
++	// ImGui asserts WindowMinSize >= 1. Scaling the 1x1 minimum by a scale below 1 (a small
++	// render surface, e.g. with the hardware scaler) would trip that and abort.
++	style.WindowMinSize = ImVec2(std::max(style.WindowMinSize.x, 1.0f), std::max(style.WindowMinSize.y, 1.0f));
+ }
+ 
+ void ImGuiManager::SetKeyMap()
