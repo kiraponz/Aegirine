@@ -40,8 +40,12 @@ import com.kira3.scphx.emulation.input.ControllerRumble
 import com.kira3.scphx.emulation.input.GamepadInput
 import com.kira3.scphx.emulation.input.PadSink
 import com.kira3.scphx.emulation.input.TouchPad
+import com.kira3.scphx.emucore.settings.SettingsJson
+import com.kira3.scphx.emucore.settings.SettingsOverrides
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import kotlin.concurrent.thread
 
 /**
@@ -123,14 +127,21 @@ class EmulationActivity : ComponentActivity() {
 
         // Settings are read fresh on every launch rather than shared in memory with
         // MainActivity, so this activity can move to its own process.
-        val bios = container.appPreferences.biosFileName.first()
+        val serial = intent.getStringExtra(EXTRA_SERIAL)
+        val settings = container.settingsRepository
+        val overrides = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
+        val global = settings.loadGlobal()
+        val gameBios = SettingsJson.merge(global, overrides).system.biosFilename
+            .takeIf { it.isNotEmpty() && File(core.biosDir, it).isFile }
+        val bios = gameBios ?: container.appPreferences.biosFileName.first()
         if (bios == null) {
             finishWithMessage(getString(R.string.emulation_bios_missing))
             return
         }
         core.setBios(bios)
+        core.applySettings(global, overrides, serial)
 
-        Log.i(TAG, "Booting $gameUri (serial ${intent.getStringExtra(EXTRA_SERIAL)})")
+        Log.i(TAG, "Booting $gameUri (serial $serial)")
         emulationThread = thread(name = "Emulation") {
             val error = core.runVm(gameUri.toString())
             runOnUiThread {
@@ -140,6 +151,15 @@ class EmulationActivity : ComponentActivity() {
                 } else {
                     finish()
                 }
+            }
+        }
+
+        // Settings changed during play (from anywhere in this process) reach the running game.
+        lifecycleScope.launch {
+            settings.changes.drop(1).collect {
+                if (!core.hasActiveVm) return@collect
+                val current = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
+                core.applySettings(settings.loadGlobal(), current, serial)
             }
         }
     }

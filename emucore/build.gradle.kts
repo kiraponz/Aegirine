@@ -2,6 +2,7 @@ import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // ARMSX2 (PCSX2 fork) emulation core, pulled in as a git submodule.
@@ -65,6 +66,8 @@ android {
 
 dependencies {
     api(libs.kotlinx.coroutines.android)
+    api(libs.kotlinx.serialization.json)
+    testImplementation(libs.junit)
 }
 
 // Copies a slice of the ARMSX2 tree into a generated source root at build time, so the

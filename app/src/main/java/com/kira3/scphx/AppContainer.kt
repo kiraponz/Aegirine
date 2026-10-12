@@ -4,6 +4,7 @@ import android.content.Context
 import com.kira3.scphx.data.AppPreferences
 import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.LibraryRepository
+import com.kira3.scphx.data.SettingsRepository
 import com.kira3.scphx.emucore.EmulatorCore
 
 /**
@@ -17,4 +18,5 @@ class AppContainer(context: Context) {
     val appPreferences: AppPreferences by lazy { AppPreferences(appContext) }
     val biosRepository: BiosRepository by lazy { BiosRepository(appContext, emulatorCore, appPreferences) }
     val libraryRepository: LibraryRepository by lazy { LibraryRepository(appContext, emulatorCore, appPreferences) }
+    val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
 }

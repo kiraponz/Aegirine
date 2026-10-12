@@ -5,6 +5,12 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.view.Surface
+import com.kira3.scphx.emucore.settings.CoreKey
+import com.kira3.scphx.emucore.settings.CoreKeys
+import com.kira3.scphx.emucore.settings.EmulatorSettings
+import com.kira3.scphx.emucore.settings.SettingsEffects
+import com.kira3.scphx.emucore.settings.SettingsJson
+import com.kira3.scphx.emucore.settings.SettingsOverrides
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -110,6 +116,103 @@ class EmulatorCore(context: Context) {
 
     /** Applies the settings written since the last commit to a running VM. */
     fun commitSettings() = NativeApp.commitSettings()
+
+    private val applyMutex = Mutex()
+    private var lastApplied: EmulatorSettings? = null
+
+    /** What the last boot was given, global and effective; see [applySettings]. */
+    private var bootSettings: Pair<EmulatorSettings, EmulatorSettings>? = null
+
+    /**
+     * Hands the settings to the core: [global] to its base layer, and [overrides] to the
+     * per-game layer of [serial] (the game about to boot, or the one running). Call it before
+     * [runVm], and again whenever settings change while a game runs; the running game picks up
+     * every change except those in [SettingsEffects.appliesOnNextBoot].
+     *
+     * Per-game values go in the core's own game layer rather than being merged into the base,
+     * because the game database outranks the base layer but not the game layer: a fix the
+     * database sets for a game would otherwise silently undo the player's choice for it.
+     *
+     * [serial] null means no per-game layer (a game whose serial could not be read).
+     */
+    suspend fun applySettings(
+        global: EmulatorSettings,
+        overrides: SettingsOverrides,
+        serial: String?,
+    ) = withContext(Dispatchers.IO) {
+        applyMutex.withLock {
+            val running = NativeApp.hasActiveVM()
+            var base = global
+            var effective = SettingsJson.merge(global, overrides)
+            val boot = bootSettings
+            if (!running) {
+                bootSettings = base to effective
+            } else if (boot != null) {
+                // A commit reconfigures the running VM from these keys, and changing a boot-time
+                // option such as the renderer under a running GS makes it rebuild its device,
+                // which is not safe mid-game. Keep what it booted with; the next boot gets the rest.
+                base = SettingsJson.copyPaths(base, boot.first, SettingsEffects.appliesOnNextBoot)
+                effective = SettingsJson.copyPaths(effective, boot.second, SettingsEffects.appliesOnNextBoot)
+            }
+
+            val baseKeys = CoreKeys.of(base)
+            for (key in CoreKeys.pinned + baseKeys) NativeApp.setSetting(key.section, key.key, key.type, key.value)
+
+            if (serial != null) {
+                writeGameLayer(serial, running, CoreKeys.of(effective), baseKeys, overrides)
+            } else if (!running) {
+                NativeApp.gameIniClearStage()
+            }
+
+            // The settings the core takes straight away rather than on commit.
+            NativeApp.setAudioVolume(effective.audio.audioVolume.coerceIn(0, 200))
+            NativeApp.setAudioMuted(effective.audio.audioMuted)
+            NativeApp.setAudioSwapChannels(effective.audio.audioSwapChannels)
+            NativeApp.setFpsCap(effective.frameLimit.fpsLimit.coerceIn(0, 1000))
+            NativeApp.setPortraitRenderTop(effective.output.portraitRenderTop)
+            NativeApp.setLandscapeRenderTop(effective.output.landscapeRenderTop)
+            NativeApp.setAffinityMode(effective.output.affinityMode.coerceIn(0, 7))
+            if (running) {
+                NativeApp.speedhackLimitermode(if (effective.frameLimit.frameLimitEnable) 0 else 3)
+                NativeApp.setNominalSpeed(effective.frameLimit.nominalSpeedPercent.coerceIn(10, 1000))
+                val previous = lastApplied
+                if (previous == null || previous.output.framerateNtsc != effective.output.framerateNtsc ||
+                    previous.output.frameratePal != effective.output.frameratePal
+                ) {
+                    // The vsync rate is cached by the pacer; a commit alone does not recompute it.
+                    NativeApp.applyFramerateLive(effective.output.framerateNtsc, effective.output.frameratePal)
+                }
+            }
+
+            // Applies everything to a running VM on its CPU thread, and saves the base layer.
+            NativeApp.commitSettings()
+            lastApplied = effective
+        }
+    }
+
+    /**
+     * Writes the game's per-game file: every key computed from an overridden field, even where
+     * it equals the global value (a key's presence is what makes the game database stand
+     * back), plus any key whose value differs from the base layer.
+     */
+    private fun writeGameLayer(
+        serial: String,
+        running: Boolean,
+        effectiveKeys: List<CoreKey>,
+        baseKeys: List<CoreKey>,
+        overrides: SettingsOverrides,
+    ) {
+        val baseValues = baseKeys.associate { it.id to it.value }
+        val began = if (running) NativeApp.gameIniBeginWrite() else NativeApp.gameIniBeginStage(serial)
+        if (!began) return
+        for (key in effectiveKeys) {
+            if (key.fields.any { it in overrides } || baseValues[key.id] != key.value) {
+                NativeApp.gameIniPut(key.section, key.key, key.value)
+            }
+        }
+        NativeApp.gameIniCommitWrite()
+        if (running) NativeApp.reloadGameSettingsLayer()
+    }
 
     // ---- BIOS and games ----
 

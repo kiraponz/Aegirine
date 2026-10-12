@@ -68,6 +68,33 @@ internal object NativeApp {
     @JvmStatic external fun setSetting(section: String, key: String, type: String, value: String)
     @JvmStatic external fun commitSettings()
 
+    // Per-game settings layer (gamesettings/<serial>_<CRC>.ini). A stream of gameIniPut
+    // calls between a begin and gameIniCommitWrite replaces the keys the app owns in it.
+    /** Starts a write for a game about to boot; the core writes the file when it loads it. */
+    @JvmStatic external fun gameIniBeginStage(serial: String): Boolean
+    /** Starts a write for the running game. False with no VM. */
+    @JvmStatic external fun gameIniBeginWrite(): Boolean
+    @JvmStatic external fun gameIniPut(section: String, key: String, value: String)
+    @JvmStatic external fun gameIniCommitWrite(): Boolean
+    @JvmStatic external fun gameIniClearStage()
+    /** Re-reads the running game's file into the game layer; the next commit applies it. */
+    @JvmStatic external fun reloadGameSettingsLayer()
+
+    // Settings the core applies directly rather than on commit. Each also writes its base key.
+    @JvmStatic external fun setAudioVolume(percent: Int)
+    @JvmStatic external fun setAudioMuted(muted: Boolean)
+    @JvmStatic external fun setAudioSwapChannels(swap: Boolean)
+    @JvmStatic external fun setNominalSpeed(percent: Int)
+    /** 0 Nominal, 1 Turbo, 2 Slow motion, 3 Unlimited. */
+    @JvmStatic external fun speedhackLimitermode(mode: Int)
+    @JvmStatic external fun applyFramerateLive(ntsc: Float, pal: Float)
+    // Runtime only, no settings key.
+    @JvmStatic external fun setFpsCap(fps: Int)
+    @JvmStatic external fun setPortraitRenderTop(top: Boolean)
+    @JvmStatic external fun setLandscapeRenderTop(top: Boolean)
+    /** Read when the VM boots. */
+    @JvmStatic external fun setAffinityMode(mode: Int)
+
     // ---- Surface ----
 
     @JvmStatic external fun onNativeSurfaceCreated()
