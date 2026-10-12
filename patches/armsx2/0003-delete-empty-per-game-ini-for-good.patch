@@ -1,0 +1,18 @@
+diff --git a/platforms/android/app/src/main/cpp/native-lib.cpp b/platforms/android/app/src/main/cpp/native-lib.cpp
+index fad9287..656b148 100644
+--- a/platforms/android/app/src/main/cpp/native-lib.cpp
++++ b/platforms/android/app/src/main/cpp/native-lib.cpp
+@@ -5664,8 +5664,12 @@ static bool CommitGameIniExport(INISettingsInterface& ini, const GameIniClaims&
+     const bool empty = ini.IsEmpty();
+     if (empty) {
+         // No per-game overrides — remove the file entirely (FullscreenUI parity).
++        // ClearSection/RemoveEmptySections leave the interface dirty, and a dirty interface
++        // saves itself when it is destroyed, which would bring the file back as an empty one.
++        // Saving first clears the flag; the delete below then sticks.
+         const std::string fn = ini.GetFileName();
+-        if (FileSystem::FileExists(fn.c_str()))
++        ok = ini.Save(&error);
++        if (ok && FileSystem::FileExists(fn.c_str()))
+             ok = FileSystem::DeleteFilePath(fn.c_str(), &error);
+     } else {
+         ok = ini.Save(&error);
