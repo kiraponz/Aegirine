@@ -630,6 +630,10 @@ class EmulationActivity : ComponentActivity() {
             .putExtra(EXTRA_FAILED_DRIVER, failedDriverName)
         startActivity(RelaunchActivity.intent(this, target))
         finish()
+        // Not left to onDestroy: RelaunchActivity is translucent, so this activity stays
+        // visible below it and would be destroyed only after the new one has started in
+        // this very process.
+        exitProcess()
     }
 
     /**
