@@ -74,6 +74,7 @@
     <string name="menu_exit_suspend">Exit and resume later</string>
     <string name="menu_show_fps">Show FPS</string>
     <string name="menu_fast_forward_button">Fast-forward button</string>
+    <string name="menu_screenshot_button">Screenshot button</string>
     <string name="menu_fast_forward_speed">Fast-forward speed</string>
     <string name="menu_fast_forward_unlimited">Unlimited</string>
     <string name="menu_fast_forward_multiple">%1$d×</string>
@@ -299,6 +300,8 @@
     <string name="settings_osd_cpu">CPU usage</string>
     <string name="settings_osd_gpu">GPU usage</string>
     <string name="settings_osd_frame_times">Frame time graph</string>
+    <string name="settings_screenshot_button">Screenshot button</string>
+    <string name="settings_screenshot_button_summary">Shows a button over the game that saves a screenshot in one tap</string>
     <string name="settings_osd_messages">Notifications</string>
     <string name="settings_osd_messages_summary">Short messages such as \"State saved\"</string>
     <string name="settings_osd_scale">Overlay size</string>

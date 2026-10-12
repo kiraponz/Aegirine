@@ -18,7 +18,7 @@ internal sealed interface TouchControl {
 }
 
 /**
- * [fastForward] and [rewind] are the centers of the buttons the pad does not draw itself. Rewind
+ * [fastForward], [rewind] and [screenshot] are the centers of the buttons the pad does not draw itself. Rewind
  * is kept well away from the shoulder buttons, so it is not pressed by a slip.
  */
 internal class TouchPadLayout(
@@ -26,6 +26,7 @@ internal class TouchPadLayout(
     val controls: List<TouchControl>,
     val fastForward: Offset,
     val rewind: Offset,
+    val screenshot: Offset,
 )
 
 /**
@@ -67,6 +68,8 @@ private fun landscapeLayout(size: Size, maxUnit: Float): TouchPadLayout {
         fastForward = Offset(w / 2, m + shoulder.height / 2),
         // Below L2: nothing fits above it.
         rewind = Offset(m + shoulder.width / 2, m + shoulder.height + 1.6f * u),
+        // Below R2, mirroring rewind.
+        screenshot = Offset(w - m - shoulder.width / 2, m + shoulder.height + 1.6f * u),
     )
 }
 
@@ -101,6 +104,8 @@ private fun portraitLayout(size: Size, maxUnit: Float): TouchPadLayout {
         fastForward = Offset(w / 2, top + 1.6f * u),
         // Above L2, in the empty space under the picture.
         rewind = Offset(m + shoulder.width / 2, top - 1.6f * u),
+        // Above R2, mirroring rewind.
+        screenshot = Offset(w - m - shoulder.width / 2, top - 1.6f * u),
     )
 }
 

@@ -253,6 +253,7 @@ object SettingsCatalog {
                 Toggle("osd.osdShowCpu", R.string.settings_osd_cpu),
                 Toggle("osd.osdShowGpu", R.string.settings_osd_gpu),
                 Toggle("osd.osdShowFrameTimes", R.string.settings_osd_frame_times),
+                Toggle("frameLimit.screenshotButton", R.string.settings_screenshot_button, R.string.settings_screenshot_button_summary),
                 Toggle("osd.osdShowMessages", R.string.settings_osd_messages, R.string.settings_osd_messages_summary),
                 Slider("osd.osdScale", R.string.settings_osd_scale, range = 25..200, step = 5, unit = R.string.settings_unit_percent),
                 Choice(

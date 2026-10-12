@@ -74,6 +74,7 @@ interface InGameMenuActions {
     fun cheats()
     fun setShowFps(show: Boolean)
     fun setFastForwardButton(show: Boolean)
+    fun setScreenshotButton(show: Boolean)
     fun setFastForwardSpeed(speed: Int)
 }
 
@@ -164,6 +165,12 @@ fun InGameMenu(
                     settings.frameLimit.fastForwardButton,
                     !busy,
                     actions::setFastForwardButton,
+                )
+                MenuSwitch(
+                    stringResource(R.string.menu_screenshot_button),
+                    settings.frameLimit.screenshotButton,
+                    !busy,
+                    actions::setScreenshotButton,
                 )
                 FastForwardSpeed(settings.frameLimit.fastForwardSpeed, !busy, actions::setFastForwardSpeed)
             }

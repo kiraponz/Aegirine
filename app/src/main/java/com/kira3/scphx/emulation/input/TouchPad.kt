@@ -69,6 +69,7 @@ fun TouchPad(
     modifier: Modifier = Modifier,
     fastForwardButton: (@Composable () -> Unit)? = null,
     rewindButton: (@Composable () -> Unit)? = null,
+    screenshotButton: (@Composable () -> Unit)? = null,
 ) {
     val view = LocalView.current
     val tracker = remember(sink) {
@@ -127,6 +128,9 @@ fun TouchPad(
         }
         if (rewindButton != null) {
             Box(Modifier.centeredAt(layout.rewind)) { rewindButton() }
+        }
+        if (screenshotButton != null) {
+            Box(Modifier.centeredAt(layout.screenshot)) { screenshotButton() }
         }
     }
 }

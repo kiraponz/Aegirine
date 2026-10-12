@@ -220,6 +220,11 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
+                        screenshotButton = if (settings?.frameLimit?.screenshotButton == true) {
+                            { ScreenshotButton(onClick = ::takeScreenshot) }
+                        } else {
+                            null
+                        },
                     )
                     val current = settings
                     if (rewindOpen) {
@@ -431,6 +436,13 @@ class EmulationActivity : ComponentActivity() {
         )
     }
 
+    private fun takeScreenshot() {
+        lifecycleScope.launch {
+            val saved = screenshots.capture(serial)
+            showMessage(getString(if (saved) R.string.emulation_screenshot_saved else R.string.emulation_screenshot_failed))
+        }
+    }
+
     /**
      * Holds Triangle+Cross through boot, the combo some games probe to offer 480p
      * progressive scan. Purely synthetic pad input; games without the prompt ignore it.
@@ -621,10 +633,11 @@ class EmulationActivity : ComponentActivity() {
         override fun screenshot() {
             // The core captures the next frame it presents, which a paused game never does.
             closeMenu()
-            lifecycleScope.launch {
-                val saved = screenshots.capture(serial)
-                showMessage(getString(if (saved) R.string.emulation_screenshot_saved else R.string.emulation_screenshot_failed))
-            }
+            takeScreenshot()
+        }
+
+        override fun setScreenshotButton(show: Boolean) = updateSetting("frameLimit.screenshotButton") {
+            it.copy(frameLimit = it.frameLimit.copy(screenshotButton = show))
         }
 
         override fun reset() {
