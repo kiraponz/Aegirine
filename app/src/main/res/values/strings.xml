@@ -40,6 +40,7 @@
 
     <!-- Emulation -->
     <string name="emulation_boot_failed">Could not start the game: %1$s</string>
+    <string name="emulation_driver_failed">The game could not start with %1$s. Trying the system driver.</string>
     <string name="emulation_bios_missing">Select a BIOS first</string>
     <string name="emulation_fast_forward">Fast forward</string>
     <string name="emulation_state_saved">Saved to slot %1$d</string>

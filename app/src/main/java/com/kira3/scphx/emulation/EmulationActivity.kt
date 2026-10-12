@@ -36,6 +36,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.kira3.scphx.R
+import com.kira3.scphx.data.GpuDriver
 import com.kira3.scphx.ScphxApplication
 import com.kira3.scphx.ui.theme.ScphxTheme
 import com.kira3.scphx.emucore.EmulatorCore
@@ -126,6 +127,12 @@ class EmulationActivity : ComponentActivity() {
 
     /** Set by Reset: when the VM stops, boot the game again instead of finishing. */
     private var restartRequested = false
+
+    /** The custom driver the current boot uses, or null for the system driver. */
+    private var customDriverInUse: GpuDriver? = null
+
+    /** Set once a boot failed with a custom driver; later boots in this activity use the system driver. */
+    private var systemDriverForced = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -239,7 +246,7 @@ class EmulationActivity : ComponentActivity() {
         } else {
             stopAutoProgressiveScanHold()
         }
-        useVulkanDriver(global, SettingsJson.merge(global, overrides))
+        customDriverInUse = useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
         Log.i(TAG, "Booting $gameUri (serial $serial)")
         emulationThread = thread(name = "Emulation") {
@@ -251,7 +258,20 @@ class EmulationActivity : ComponentActivity() {
 
     private fun onVmStopped(gameUri: Uri, error: String?) {
         stopAutoProgressiveScanHold()
+        val failedDriver = customDriverInUse
         when {
+            // The custom driver loaded but the game still could not start (e.g. the GPU could
+            // not create a Vulkan device with it): once, try again with the system driver.
+            error != null && failedDriver != null && !systemDriverForced -> {
+                Log.w(TAG, "Boot failed with driver ${failedDriver.id} ($error); retrying with the system driver")
+                systemDriverForced = true
+                Toast.makeText(
+                    applicationContext,
+                    getString(R.string.emulation_driver_failed, failedDriver.name),
+                    Toast.LENGTH_LONG,
+                ).show()
+                lifecycleScope.launch { startVm(gameUri) }
+            }
             error != null -> {
                 Log.e(TAG, "Boot failed: $error")
                 finishWithMessage(getString(R.string.emulation_boot_failed, error))
@@ -266,15 +286,18 @@ class EmulationActivity : ComponentActivity() {
 
     /**
      * Points the core at the custom Vulkan driver this game uses. A game whose driver has been
-     * deleted follows the global driver, and the system driver is used when neither is installed.
+     * deleted follows the global driver, and the system driver is used when neither is installed
+     * (or after a boot failed with the custom driver, see [systemDriverForced]).
+     * Returns the custom driver set, or null for the system driver.
      */
-    private suspend fun useVulkanDriver(global: EmulatorSettings, effective: EmulatorSettings) {
+    private suspend fun useVulkanDriver(global: EmulatorSettings, effective: EmulatorSettings): GpuDriver? {
         val installed = container.driverRepository.list()
         fun find(id: String) = installed.firstOrNull { it.id == id }
         val id = effective.output.customDriverId
-        val driver = if (id.isEmpty()) null else find(id) ?: find(global.output.customDriverId)
+        val driver = if (id.isEmpty() || systemDriverForced) null else find(id) ?: find(global.output.customDriverId)
         if (id.isNotEmpty() && driver?.id != id) Log.w(TAG, "Driver $id is not installed, using ${driver?.id ?: "the system driver"}")
         core.useVulkanDriver(driver?.toVulkanDriver(), effective.output.turnipUbwcHint)
+        return driver
     }
 
     private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides) {
