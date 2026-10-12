@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -36,7 +37,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -286,10 +286,17 @@ private fun SliderRow(row: RowParams, setting: Slider, actions: SettingsActions)
     val path = setting.path!!
     val range = setting.range
     val current = row.values.int(path)
-    // Follows the finger while dragging; saved once the drag ends.
-    var position by remember(current) { mutableFloatStateOf(current.coerceIn(range).toFloat()) }
-    fun snapped() = (((position - range.first) / setting.step).roundToInt() * setting.step + range.first).coerceIn(range)
     val stops = (range.last - range.first) / setting.step
+    // Follows the finger while dragging; saved once the drag ends.
+    val slider = remember(current) {
+        SliderState(
+            value = current.coerceIn(range).toFloat(),
+            // Tick marks only while they stay far enough apart to read.
+            steps = if (stops <= 20) stops - 1 else 0,
+            trackRange = range.first.toFloat()..range.last.toFloat(),
+        )
+    }
+    fun snapped() = (((slider.value - range.first) / setting.step).roundToInt() * setting.step + range.first).coerceIn(range)
     SegmentedListItem(
         shapes = row.shapes,
         colors = settingsListColors(),
@@ -301,16 +308,13 @@ private fun SliderRow(row: RowParams, setting: Slider, actions: SettingsActions)
             Column {
                 if (setting.hasSupporting()) Supporting(setting)
                 Slider(
-                    value = position,
-                    onValueChange = { position = it },
+                    state = slider,
+                    onValueChange = { slider.value = it },
                     onValueChangeFinished = {
                         val value = snapped()
-                        position = value.toFloat()
+                        slider.value = value.toFloat()
                         if (value != current) actions.set(path, value)
                     },
-                    valueRange = range.first.toFloat()..range.last.toFloat(),
-                    // Tick marks only while they stay far enough apart to read.
-                    steps = if (stops <= 20) stops - 1 else 0,
                     enabled = row.enabled,
                 )
             }
