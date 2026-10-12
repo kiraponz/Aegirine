@@ -15,6 +15,7 @@ object SettingsCatalog {
             SettingsCategory.Graphics to graphics(),
             SettingsCategory.Performance to performance(),
             SettingsCategory.Audio to audio(),
+            SettingsCategory.Controls to controls(),
             SettingsCategory.System to system(),
             SettingsCategory.Advanced to advanced(),
         )
@@ -381,6 +382,27 @@ object SettingsCatalog {
                 Toggle("audio.audioOpenSLES", R.string.settings_opensles, R.string.settings_opensles_summary),
             ),
             advanced = true,
+        ),
+    )
+
+    private fun controls() = listOf(
+        SettingsSection(
+            R.string.settings_section_virtual_pad,
+            listOf(
+                Choice(
+                    "controls.stickMode", R.string.settings_stick_mode, R.string.settings_stick_mode_summary,
+                    options = options(res(R.string.settings_opt_stick_fixed), res(R.string.settings_opt_stick_floating)),
+                ),
+                Slider(
+                    "controls.padOpacity", R.string.settings_pad_opacity,
+                    range = 20..100, step = 5, unit = R.string.settings_unit_percent,
+                ),
+                Toggle("controls.padHaptics", R.string.settings_pad_haptics),
+            ),
+        ),
+        SettingsSection(
+            R.string.settings_section_controllers,
+            listOf(ControllersSetting),
         ),
     )
 

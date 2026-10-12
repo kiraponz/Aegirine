@@ -27,7 +27,10 @@ internal class TouchPadLayout(
     val fastForward: Offset,
     val rewind: Offset,
     val screenshot: Offset,
-)
+) {
+    /** The same pad without the drawn sticks, for sticks that appear under a finger. */
+    fun withoutSticks() = TouchPadLayout(unit, controls.filter { it !is TouchControl.Stick }, fastForward, rewind, screenshot)
+}
 
 /**
  * Places the controls for an area of [size]. Everything is sized from one unit, so the pad

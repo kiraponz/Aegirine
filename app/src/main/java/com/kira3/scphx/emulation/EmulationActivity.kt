@@ -220,6 +220,9 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
+                        floatingSticks = settings?.controls?.stickMode == 1,
+                        opacity = (settings?.controls?.padOpacity ?: 100) / 100f,
+                        haptics = settings?.controls?.padHaptics != false,
                         screenshotButton = if (settings?.frameLimit?.screenshotButton == true) {
                             { ScreenshotButton(onClick = ::takeScreenshot) }
                         } else {

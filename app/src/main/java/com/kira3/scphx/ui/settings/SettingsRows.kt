@@ -36,11 +36,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -52,6 +54,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kira3.scphx.R
+import android.content.Context
+import android.hardware.input.InputManager
+import android.view.InputDevice
 import com.kira3.scphx.data.GpuDriver
 import com.kira3.scphx.emucore.settings.PerformancePreset
 import com.kira3.scphx.emucore.settings.SettingsValues
@@ -96,6 +101,7 @@ fun SettingRow(
         GameBiosSetting -> DialogChoiceRow(row, biosChoice(state), actions)
         GpuDriverSetting -> GpuDriverRow(row, state, actions)
         BiosManageSetting -> BiosManageRow(row, actions)
+        ControllersSetting -> ControllersRow(row)
     }
 }
 
@@ -117,6 +123,41 @@ private fun biosChoice(state: SettingsUiState): Choice = Choice(
         state.bioses.map { Option(it.fileName, Label.text("${it.metadata.description} (${it.fileName})")) },
     gameOnly = true,
 )
+
+@Composable
+private fun ControllersRow(row: RowParams) {
+    val context = LocalContext.current
+    var names by remember { mutableStateOf(connectedControllerNames()) }
+    DisposableEffect(context) {
+        val manager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
+        val listener = object : InputManager.InputDeviceListener {
+            override fun onInputDeviceAdded(deviceId: Int) { names = connectedControllerNames() }
+            override fun onInputDeviceRemoved(deviceId: Int) { names = connectedControllerNames() }
+            override fun onInputDeviceChanged(deviceId: Int) { names = connectedControllerNames() }
+        }
+        manager.registerInputDeviceListener(listener, null)
+        onDispose { manager.unregisterInputDeviceListener(listener) }
+    }
+    SegmentedListItem(
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        supportingContent = {
+            Column {
+                if (names.isEmpty()) Text(stringResource(R.string.settings_controllers_none))
+                for (name in names) Text(name)
+            }
+        },
+    ) { Text(stringResource(ControllersSetting.title)) }
+}
+
+/** Names of the game controllers connected now. */
+private fun connectedControllerNames(): List<String> = InputDevice.getDeviceIds().toList().mapNotNull { id ->
+    InputDevice.getDevice(id)?.takeIf {
+        !it.isVirtual && ((it.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+            (it.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK)
+    }?.name
+}
 
 @Composable
 private fun BiosManageRow(row: RowParams, actions: SettingsActions) {

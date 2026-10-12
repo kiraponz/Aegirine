@@ -20,6 +20,7 @@ enum class SettingsCategory(
     Graphics(R.string.settings_graphics, R.string.settings_graphics_summary, R.drawable.ic_palette),
     Performance(R.string.settings_performance, R.string.settings_performance_summary, R.drawable.ic_speed),
     Audio(R.string.settings_audio, R.string.settings_audio_summary, R.drawable.ic_volume_up),
+    Controls(R.string.settings_controls, R.string.settings_controls_summary, R.drawable.ic_gamepad),
     System(R.string.settings_system, R.string.settings_system_summary, R.drawable.ic_memory),
     Advanced(R.string.settings_advanced, R.string.settings_advanced_summary, R.drawable.ic_build);
 
@@ -131,4 +132,9 @@ data object GpuDriverSetting : Setting(
 /** The BIOS files the app holds, managed on their own screen. */
 data object BiosManageSetting : Setting(
     null, R.string.settings_bios_manage, R.string.settings_bios_manage_summary, null, null, globalOnly = true,
+)
+
+/** The controllers connected now, shown for information. */
+data object ControllersSetting : Setting(
+    null, R.string.settings_controllers, 0, null, null, globalOnly = true,
 )

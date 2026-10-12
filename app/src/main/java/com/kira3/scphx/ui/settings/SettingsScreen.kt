@@ -175,6 +175,7 @@ private fun CategoryIcon(category: SettingsCategory, index: Int) {
         SettingsCategory.Graphics -> MaterialShapes.Cookie9Sided
         SettingsCategory.Performance -> MaterialShapes.Clover4Leaf
         SettingsCategory.Audio -> MaterialShapes.Sunny
+        SettingsCategory.Controls -> MaterialShapes.Gem
         SettingsCategory.System -> MaterialShapes.Pentagon
         SettingsCategory.Advanced -> MaterialShapes.Cookie6Sided
     }.toShape()

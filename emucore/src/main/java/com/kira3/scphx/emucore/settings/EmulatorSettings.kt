@@ -28,6 +28,7 @@ data class EmulatorSettings(
     val graphics: GraphicsSettings = GraphicsSettings(),
     val osd: OsdSettings = OsdSettings(),
     val rewind: RewindSettings = RewindSettings(),
+    val controls: ControlsSettings = ControlsSettings(),
 ) {
     val effectiveVu1ClampMode: Int get() = if (cpu.vu1ClampMode < 0) cpu.vuClampMode else cpu.vu1ClampMode
 }
@@ -80,6 +81,17 @@ data class CpuSettings(
     val vu1CrossBlockPState: Boolean = false,
     val vu1InlineDrainTestPipes: Boolean = false,
     val vu1FmacInstanceRouting: Boolean = false,
+)
+
+/** The on-screen pad. App side only; nothing here reaches the core. */
+@Serializable
+data class ControlsSettings(
+    /** 0 = sticks drawn at a fixed place, 1 = sticks that appear where a finger touches an empty part of the screen. */
+    val stickMode: Int = 0,
+    /** How opaque the pad is, as a percent (20..100). */
+    val padOpacity: Int = 100,
+    /** Vibrate when a button is pressed. */
+    val padHaptics: Boolean = true,
 )
 
 /** Rewind: the core's autosaves, kept as a short history the player can go back to. */
