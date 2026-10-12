@@ -1,8 +1,15 @@
 package com.kira3.scphx.data
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.kira3.scphx.data.memcard.CardState
+import com.kira3.scphx.data.memcard.FolderCard
+import com.kira3.scphx.data.memcard.Ps2Card
+import com.kira3.scphx.data.memcard.SaveInfo
+import com.kira3.scphx.data.memcard.SaveStore
+import com.kira3.scphx.data.memcard.WriteResult
 import com.kira3.scphx.emucore.EmulatorCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +31,15 @@ data class MemoryCard(
     val modified: Long,
 )
 
-enum class MemoryCardResult { Ok, Exists, Invalid, Failed }
+enum class MemoryCardResult { Ok, Exists, Invalid, Failed, Full, Busy }
+
+/** What a card holds, for its page: [saves] is empty and [state] says why unless it is formatted. */
+class SaveListing(
+    val state: CardState,
+    val saves: List<SaveInfo>,
+    val freeKilobytes: Int?,
+    val capacityKilobytes: Int?,
+)
 
 /**
  * The cards the core reads and writes in `<dataDir>/memcards`. The core picks a card by file name,
@@ -35,7 +50,8 @@ class MemoryCardRepository(
     context: Context,
     private val core: EmulatorCore,
 ) {
-    private val contentResolver = context.applicationContext.contentResolver
+    private val appContext = context.applicationContext
+    private val contentResolver = appContext.contentResolver
     private val changes = MutableStateFlow(0)
 
     val cards: Flow<List<MemoryCard>> = changes.map { list() }
@@ -59,6 +75,7 @@ class MemoryCardRepository(
     }
 
     suspend fun rename(card: MemoryCard, newName: String): MemoryCardResult = withContext(Dispatchers.IO) {
+        if (gameRunning()) return@withContext MemoryCardResult.Busy
         val cardName = cardName(newName) ?: return@withContext MemoryCardResult.Invalid
         if (cardName == card.name) return@withContext MemoryCardResult.Ok
         val target = File(core.memoryCardsDir, cardName)
@@ -68,9 +85,11 @@ class MemoryCardRepository(
         if (ok) MemoryCardResult.Ok else MemoryCardResult.Failed
     }
 
-    suspend fun delete(card: MemoryCard) = withContext(Dispatchers.IO) {
+    suspend fun delete(card: MemoryCard): MemoryCardResult = withContext(Dispatchers.IO) {
+        if (gameRunning()) return@withContext MemoryCardResult.Busy
         File(core.memoryCardsDir, card.name).deleteRecursively()
         changed()
+        MemoryCardResult.Ok
     }
 
     /** The file name to offer when exporting [card]: a folder card is saved as a zip. */
@@ -126,6 +145,104 @@ class MemoryCardRepository(
             return MemoryCardResult.Invalid
         }
         return if (temp.renameTo(freeFile(name))) MemoryCardResult.Ok else MemoryCardResult.Failed
+    }
+
+    // ---- Saves on a card ----
+
+    /** What [card] holds. Null if it cannot be read. */
+    suspend fun listSaves(card: MemoryCard): SaveListing? = withContext(Dispatchers.IO) {
+        runCatching {
+            if (card.isFolder) {
+                val store = FolderCard(File(core.memoryCardsDir, card.name))
+                SaveListing(CardState.Formatted, store.list(), null, null)
+            } else {
+                Ps2Card(File(core.memoryCardsDir, card.name)).use { c ->
+                    SaveListing(c.state, c.list(), c.freeKilobytes(), c.capacityKilobytes().takeIf { it > 0 })
+                }
+            }
+        }.getOrNull()
+    }
+
+    /** The names among [names] that [target] already has a save for. */
+    suspend fun conflicts(target: MemoryCard, names: List<String>): List<String> {
+        val existing = listSaves(target)?.saves?.map { it.name }.orEmpty().toSet()
+        return names.filter { it in existing }
+    }
+
+    /**
+     * Copies the saves [names] from [source] to [target] (replacing saves of the same name), and
+     * removes them from [source] too if [move]. Nothing changes on a card unless all of it worked.
+     */
+    suspend fun transfer(source: MemoryCard, target: MemoryCard, names: List<String>, move: Boolean): MemoryCardResult =
+        withContext(Dispatchers.IO) {
+            if (gameRunning()) return@withContext MemoryCardResult.Busy
+            if (source.name == target.name) return@withContext MemoryCardResult.Invalid
+            runCatching {
+                val saves = withStore(source, writable = false) { store ->
+                    names.map { store.read(it) ?: return@withStore null }
+                } ?: return@runCatching MemoryCardResult.Failed
+                val written = withCommittedStore(target, writable = true) { store ->
+                    for (save in saves) {
+                        when (store.write(save, replace = true)) {
+                            WriteResult.Ok -> Unit
+                            WriteResult.Full -> return@withCommittedStore MemoryCardResult.Full to false
+                            else -> return@withCommittedStore MemoryCardResult.Failed to false
+                        }
+                    }
+                    MemoryCardResult.Ok to true
+                } ?: return@runCatching MemoryCardResult.Failed
+                if (written == MemoryCardResult.Ok && move) {
+                    withCommittedStore(source, writable = true) { store ->
+                        names.forEach(store::delete)
+                        Unit to true
+                    }
+                }
+                written
+            }.getOrDefault(MemoryCardResult.Failed).also { changed() }
+        }
+
+    suspend fun deleteSaves(card: MemoryCard, names: List<String>): MemoryCardResult = withContext(Dispatchers.IO) {
+        if (gameRunning()) return@withContext MemoryCardResult.Busy
+        runCatching {
+            withCommittedStore(card, writable = true) { store ->
+                names.forEach(store::delete)
+                Unit to true
+            }
+            MemoryCardResult.Ok
+        }.getOrDefault(MemoryCardResult.Failed).also { changed() }
+    }
+
+    /**
+     * Runs [block] on the saves of [card]. For a card file opened [writable] that is a copy of it,
+     * which replaces the card only if the block says to keep its changes (the second of its pair).
+     */
+    private fun <T> withStore(card: MemoryCard, writable: Boolean, block: (SaveStore) -> T?): T? =
+        withCommittedStore(card, writable) { store -> block(store)?.let { it to true } }
+
+    private fun <T> withCommittedStore(card: MemoryCard, writable: Boolean, block: (SaveStore) -> Pair<T, Boolean>?): T? {
+        val original = File(core.memoryCardsDir, card.name)
+        if (card.isFolder) return block(FolderCard(original))?.first
+        if (!writable) return Ps2Card(original).use { block(it)?.first }
+        val temp = File(core.memoryCardsDir, "${card.name}$TEMP_SUFFIX")
+        original.copyTo(temp, overwrite = true)
+        var keep = false
+        val result = try {
+            Ps2Card(temp, writable = true).use { store ->
+                block(store)?.also { keep = it.second }?.first
+            }
+        } catch (e: Exception) {
+            temp.delete()
+            throw e
+        }
+        if (keep && temp.renameTo(original)) return result
+        temp.delete()
+        return if (keep) null else result
+    }
+
+    /** Whether a game is running in the emulation process, which holds the cards open. */
+    private fun gameRunning(): Boolean {
+        val manager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return manager.runningAppProcesses.orEmpty().any { it.processName == "${appContext.packageName}:emu" }
     }
 
     private fun changed() {

@@ -23,7 +23,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** What to tell the user once, after an action. */
-enum class MemoryCardMessage { Created, Imported, Exported, Renamed, Deleted, Exists, Invalid, Failed }
+enum class MemoryCardMessage {
+    Created, Imported, Exported, Renamed, Deleted, Exists, Invalid, Failed, Full, Busy,
+    SavesCopied, SavesMoved, SavesDeleted,
+}
 
 data class MemoryCardsUiState(
     /** Null while the card folder is being read. */
@@ -58,10 +61,7 @@ class MemoryCardsViewModel(private val repository: MemoryCardRepository) : ViewM
     fun rename(card: MemoryCard, newName: String) =
         run(MemoryCardMessage.Renamed) { repository.rename(card, newName) }
 
-    fun delete(card: MemoryCard) = run(MemoryCardMessage.Deleted) {
-        repository.delete(card)
-        MemoryCardResult.Ok
-    }
+    fun delete(card: MemoryCard) = run(MemoryCardMessage.Deleted) { repository.delete(card) }
 
     fun exportName(card: MemoryCard): String = repository.exportName(card)
 
@@ -81,6 +81,8 @@ class MemoryCardsViewModel(private val repository: MemoryCardRepository) : ViewM
                 MemoryCardResult.Exists -> MemoryCardMessage.Exists
                 MemoryCardResult.Invalid -> MemoryCardMessage.Invalid
                 MemoryCardResult.Failed -> MemoryCardMessage.Failed
+                MemoryCardResult.Full -> MemoryCardMessage.Full
+                MemoryCardResult.Busy -> MemoryCardMessage.Busy
             }
         }
     }

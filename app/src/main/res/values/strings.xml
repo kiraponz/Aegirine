@@ -162,7 +162,7 @@
     <string name="memcards_actions">Card actions</string>
     <string name="memcards_name">Name</string>
     <string name="memcards_empty">No memory cards yet. A game makes its card the first time it uses one.</string>
-    <string name="memcards_about">A folder card keeps each save in its own folder and is exported as a zip. Pick the card each game uses in its settings, under System.</string>
+    <string name="memcards_about">Tap a card to see its saves and copy them to another card. A folder card keeps each save in its own folder and is exported as a zip. Pick the card each game uses in its settings, under System.</string>
     <string name="memcards_create_hint">8 MB is what most games expect. A folder card has no size limit.</string>
     <string name="memcards_kind_folder">Folder</string>
     <string name="memcards_kind_mb">%1$d MB</string>
@@ -177,6 +177,39 @@
     <string name="memcards_exists">A card with that name already exists</string>
     <string name="memcards_invalid">That is not a memory card</string>
     <string name="memcards_failed">Could not complete that</string>
+    <string name="memcards_busy">Quit the game first: it is using the memory cards</string>
+    <string name="memcards_full">Not enough room on that card</string>
+    <string name="memcards_select_all">Select all</string>
+    <string name="memcards_select_none">Clear</string>
+    <string name="memcards_copy_to">Copy to…</string>
+    <string name="memcards_move_to">Move to…</string>
+    <string name="memcards_copy">Copy</string>
+    <string name="memcards_move">Move</string>
+    <string name="memcards_replace">Replace</string>
+    <string name="memcards_skip">Skip</string>
+    <string name="memcards_replace_title">Replace saves on %1$s?</string>
+    <string name="memcards_delete_saves_text">The saves are removed from the card.</string>
+    <string name="memcards_free_of">%1$d KB free of %2$d KB</string>
+    <string name="memcards_not_formatted">Not formatted yet. It is set up when a save is added.</string>
+    <string name="memcards_no_saves">No saves on this card</string>
+    <string name="memcards_unreadable">This card cannot be read</string>
+    <string name="memcards_gone">This card no longer exists</string>
+    <string name="memcards_save_size">%1$d KB</string>
+    <string name="memcards_saves_copied">Saves copied</string>
+    <string name="memcards_saves_moved">Saves moved</string>
+    <string name="memcards_saves_deleted">Saves deleted</string>
+    <plurals name="memcards_selected">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="memcards_replace_text">
+        <item quantity="one">%1$d save already exists there. Replace it with this one?</item>
+        <item quantity="other">%1$d saves already exist there. Replace them with these?</item>
+    </plurals>
+    <plurals name="memcards_delete_saves_title">
+        <item quantity="one">Delete %1$d save?</item>
+        <item quantity="other">Delete %1$d saves?</item>
+    </plurals>
     <string name="settings_system">System</string>
     <string name="settings_system_summary">Boot, BIOS, patches</string>
     <string name="settings_advanced">Advanced</string>

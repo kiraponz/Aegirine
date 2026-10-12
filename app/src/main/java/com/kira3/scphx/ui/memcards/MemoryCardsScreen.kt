@@ -70,6 +70,7 @@ import java.util.Date
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun MemoryCardsScreen(
+    onOpenCard: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: MemoryCardsViewModel = viewModel(factory = MemoryCardsViewModel.Factory),
 ) {
@@ -101,10 +102,11 @@ fun MemoryCardsScreen(
         MemoryCardMessage.Exists to stringResource(R.string.memcards_exists),
         MemoryCardMessage.Invalid to stringResource(R.string.memcards_invalid),
         MemoryCardMessage.Failed to stringResource(R.string.memcards_failed),
+        MemoryCardMessage.Busy to stringResource(R.string.memcards_busy),
     )
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(messages.getValue(message))
+        messages[message]?.let { snackbarHostState.showSnackbar(it) }
         viewModel.onMessageShown()
     }
 
@@ -155,7 +157,7 @@ fun MemoryCardsScreen(
             }
             itemsIndexed(cards, key = { _, card -> card.name }) { index, card ->
                 SegmentedListItem(
-                    onClick = {},
+                    onClick = { onOpenCard(card.name) },
                     shapes = segmentedShapes(index, cards.size),
                     colors = settingsListColors(),
                     modifier = Modifier.animateItem(),

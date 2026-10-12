@@ -14,6 +14,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.kira3.scphx.ui.bios.BiosScreen
+import com.kira3.scphx.ui.memcards.MemoryCardSavesScreen
 import com.kira3.scphx.ui.memcards.MemoryCardsScreen
 import com.kira3.scphx.ui.library.LibraryScreen
 import com.kira3.scphx.ui.settings.CheatGamesScreen
@@ -37,7 +38,7 @@ fun ScphxApp() {
     // Beside the settings list, opening something replaces what is open in the detail pane.
     fun openDetail(route: NavKey) {
         val last = backStack.lastOrNull()
-        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is CheatsRoute || last is CheatGamesRoute) {
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute) {
             while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
         }
         backStack.add(route)
@@ -74,7 +75,15 @@ fun ScphxApp() {
             entry<MemoryCardsRoute>(
                 metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
             ) {
-                MemoryCardsScreen(onBack = { backStack.removeLastOrNull() })
+                MemoryCardsScreen(
+                    onOpenCard = { backStack.add(MemoryCardRoute(it)) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<MemoryCardRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) { route ->
+                MemoryCardSavesScreen(cardName = route.name, onBack = { backStack.removeLastOrNull() })
             }
             entry<SettingsRoute>(
                 metadata = { route ->
