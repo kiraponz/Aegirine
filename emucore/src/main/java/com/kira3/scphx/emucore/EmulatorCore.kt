@@ -286,6 +286,25 @@ class EmulatorCore(context: Context) {
         return names.getOrNull(2)?.takeIf { it.isNotBlank() } ?: names.firstOrNull()?.takeIf { it.isNotBlank() }
     }
 
+    /**
+     * Writes [serial]'s cheats where the core reads them and turns on the ones that are
+     * enabled, in the running game. The file is named by the game's CRC, which is known only
+     * once the game runs, so this is false before that. Blocking I/O.
+     */
+    fun applyCheats(serial: String, cheats: List<Cheat>): Boolean {
+        val crc = gameCrc.uppercase().takeIf { it.length == 8 && it != "00000000" } ?: return false
+        val file = File(File(dataDir, CHEATS_DIR), "${serial}_$crc.pnach")
+        val groups = Pnach.groupNames(cheats)
+        val previous = if (file.isFile) Pnach.namesIn(file.readText()) else emptyList()
+        file.parentFile?.mkdirs()
+        if (groups.isEmpty()) file.delete() else file.writeText(Pnach.build(groups))
+        val all = (previous + groups.map { it.second }).distinct()
+        val enabled = groups.filter { it.first.enabled }.map { it.second }
+        NativeApp.setEnabledPatches(true, all.toTypedArray(), enabled.toTypedArray(), serial)
+        NativeApp.reloadPatches()
+        return true
+    }
+
     /** Opens [uri] and detaches the fd; the core takes ownership and closes it. */
     private fun openFd(uri: Uri): Int? = try {
         appContext.contentResolver.openFileDescriptor(uri, "r")?.detachFd()
@@ -467,6 +486,7 @@ class EmulatorCore(context: Context) {
         /** The core's resume state, which it keeps apart from the numbered slots. */
         private const val SUSPEND_SLOT = -1
         private const val SAVE_STATE_DIR = "sstates"
+        private const val CHEATS_DIR = "cheats"
         private const val REWIND_POINTS_MAX = 5
 
         private const val TAG = "EmulatorCore"

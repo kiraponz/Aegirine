@@ -71,6 +71,7 @@ interface InGameMenuActions {
     /** Saves where the game stands, then exits; the next start picks up from there. */
     fun exitAndResumeLater()
     fun rewind()
+    fun cheats()
     fun setShowFps(show: Boolean)
     fun setFastForwardButton(show: Boolean)
     fun setFastForwardSpeed(speed: Int)
@@ -145,6 +146,9 @@ fun InGameMenu(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 if (hasGame && settings.rewind.enabled) {
                     MenuAction(stringResource(R.string.menu_rewind), !busy, actions::rewind)
+                }
+                if (hasGame) {
+                    MenuAction(stringResource(R.string.menu_cheats), !busy, actions::cheats)
                 }
                 MenuAction(stringResource(R.string.menu_screenshot), !busy, actions::screenshot)
                 MenuAction(stringResource(R.string.menu_reset), !busy) { confirm = Confirm.Reset }

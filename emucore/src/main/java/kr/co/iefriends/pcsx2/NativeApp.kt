@@ -147,6 +147,9 @@ internal object NativeApp {
     /** "00000000" until the game's ELF is running. */
     @JvmStatic external fun getGameCRC(): String
     @JvmStatic external fun getTitlesForSerial(serial: String): String
+    /** Which named cheats (or patches) the next [reloadPatches] turns on, for [serial]'s game. */
+    @JvmStatic external fun setEnabledPatches(cheats: Boolean, allNames: Array<String>, enabledNames: Array<String>, serial: String)
+    @JvmStatic external fun reloadPatches(): Int
     @JvmStatic external fun getRegionForSerial(serial: String): String
     @JvmStatic external fun getCompatibilityForSerial(serial: String): Int
     @JvmStatic external fun getFPS(): Float

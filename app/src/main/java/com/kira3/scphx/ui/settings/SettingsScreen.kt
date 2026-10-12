@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,6 +78,8 @@ fun SettingsHomeScreen(
     selected: SettingsCategory?,
     onOpenCategory: (SettingsCategory) -> Unit,
     onOpenSearch: () -> Unit,
+    cheatsSelected: Boolean,
+    onOpenCheats: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(serial)),
 ) {
@@ -137,6 +140,18 @@ fun SettingsHomeScreen(
                     },
                 ) { Text(stringResource(category.title)) }
             }
+            item(key = "cheats") {
+                SegmentedListItem(
+                    selected = cheatsSelected,
+                    onClick = onOpenCheats,
+                    shapes = ListItemDefaults.segmentedShapes(0, 1),
+                    colors = settingsListColors(highlightSelected = true),
+                    modifier = Modifier.animateItem().padding(top = 12.dp),
+                    leadingContent = { ShapedIcon(MaterialShapes.Flower.toShape(), R.drawable.ic_cheats, categories.size) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                    supportingContent = { Text(stringResource(R.string.settings_cheats_summary)) },
+                ) { Text(stringResource(R.string.settings_cheats)) }
+            }
         }
     }
 
@@ -156,7 +171,6 @@ fun SettingsHomeScreen(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CategoryIcon(category: SettingsCategory, index: Int) {
-    val colors = MaterialTheme.colorScheme
     val shape: Shape = when (category) {
         SettingsCategory.Graphics -> MaterialShapes.Cookie9Sided
         SettingsCategory.Performance -> MaterialShapes.Clover4Leaf
@@ -164,6 +178,13 @@ private fun CategoryIcon(category: SettingsCategory, index: Int) {
         SettingsCategory.System -> MaterialShapes.Pentagon
         SettingsCategory.Advanced -> MaterialShapes.Cookie6Sided
     }.toShape()
+    ShapedIcon(shape, category.icon, index)
+}
+
+/** [icon] on [shape], colored by the row's [index] so neighbors differ. */
+@Composable
+private fun ShapedIcon(shape: Shape, icon: Int, index: Int) {
+    val colors = MaterialTheme.colorScheme
     val (container, content) = when (index % 3) {
         0 -> colors.primaryContainer to colors.onPrimaryContainer
         // Not secondaryContainer, which is the selected row's color.
@@ -174,7 +195,7 @@ private fun CategoryIcon(category: SettingsCategory, index: Int) {
         Modifier.size(44.dp).clip(shape).background(container),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(painterResource(category.icon), contentDescription = null, tint = content, modifier = Modifier.size(22.dp))
+        Icon(painterResource(icon), contentDescription = null, tint = content, modifier = Modifier.size(22.dp))
     }
 }
 

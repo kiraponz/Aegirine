@@ -27,7 +27,8 @@ internal object CoreKeys {
      */
     val pinned: List<CoreKey> = KeyWriter().apply {
         put("Achievements", "Enabled", "bool", "false")
-        put("EmuCore", "EnableCheats", "bool", "false")
+        // The cheats are the game's own and off unless the player enabled them, so this only lets them run.
+        put("EmuCore", "EnableCheats", "bool", "true")
         put("EmuCore/GS", "LoadTextureReplacements", "bool", "false")
         put("EmuCore/GS", "DumpReplaceableTextures", "bool", "false")
         put("EmuCore/GS", "OsdShowTextureReplacements", "bool", "false")

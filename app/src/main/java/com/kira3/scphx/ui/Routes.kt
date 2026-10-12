@@ -32,3 +32,16 @@ data class SettingsSearchRoute(val serial: String? = null, val gameTitle: String
 /** The custom Vulkan driver of the settings [SettingsRoute] lists, global or for a game. */
 @Serializable
 data class GpuDriverRoute(val serial: String? = null, val gameTitle: String? = null) : NavKey
+
+/** A game's cheats, a page of that game's settings. */
+@Serializable
+data class CheatsRoute(
+    val serial: String,
+    val gameTitle: String? = null,
+    /** Opened from the global settings, where the game was picked from [CheatGamesRoute]. */
+    val fromGlobal: Boolean = false,
+) : NavKey
+
+/** The games to pick from for their cheats, a page of the global settings. */
+@Serializable
+data object CheatGamesRoute : NavKey

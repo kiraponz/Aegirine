@@ -41,6 +41,7 @@ import com.kira3.scphx.R
 import com.kira3.scphx.data.GpuDriver
 import com.kira3.scphx.ScphxApplication
 import com.kira3.scphx.ui.theme.ScphxTheme
+import com.kira3.scphx.emucore.Cheat
 import com.kira3.scphx.emucore.EmulatorCore
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
@@ -137,6 +138,12 @@ class EmulationActivity : ComponentActivity() {
     private var rewindSlots by mutableStateOf<List<SaveSlot>?>(null)
     private var rewindNow by mutableLongStateOf(0L)
 
+    private var cheatsOpen by mutableStateOf(false)
+    private var cheatList by mutableStateOf<List<Cheat>?>(null)
+
+    /** Waits for the game's CRC, then gives the core its cheats. */
+    private var cheatsJob: Job? = null
+
     /** Set by Reset: when the VM stops, boot the game again instead of finishing. */
     private var restartRequested = false
 
@@ -169,6 +176,7 @@ class EmulationActivity : ComponentActivity() {
             when {
                 menuOpen -> if (!stateBusy) closeMenu()
                 rewindOpen -> if (!stateBusy) closeRewind()
+                cheatsOpen -> closeCheats()
                 core.hasActiveVm -> openMenu()
                 // Still booting, or the boot failed: nothing to pause.
                 else -> exit()
@@ -216,6 +224,9 @@ class EmulationActivity : ComponentActivity() {
                     val current = settings
                     if (rewindOpen) {
                         RewindMenu(rewindSlots, rewindNow, stateBusy, ::rewindTo, ::closeRewind)
+                    }
+                    if (cheatsOpen) {
+                        CheatsMenu(cheatList, ::toggleCheat, ::closeCheats)
                     }
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
@@ -283,6 +294,8 @@ class EmulationActivity : ComponentActivity() {
             stopAutoProgressiveScanHold()
         }
         customDriverInUse = useVulkanDriver(global, SettingsJson.merge(global, overrides))
+
+        startCheats()
 
         Log.i(TAG, "Booting $gameUri (serial $serial)" + if (suspended != null) " from ${suspended.name}" else "")
         emulationThread = thread(name = "Emulation") {
@@ -467,7 +480,7 @@ class EmulationActivity : ComponentActivity() {
 
     /** Opens the rewind menu over a paused game, from the button over the game. */
     private fun openRewind() {
-        if (menuOpen || rewindOpen || stateBusy) return
+        if (menuOpen || rewindOpen || cheatsOpen || stateBusy) return
         gamepad.releaseAll()
         if (core.vmState.value == VmState.Running) {
             core.pause()
@@ -509,6 +522,49 @@ class EmulationActivity : ComponentActivity() {
                 core.isMemcardBusy -> showMessage(getString(R.string.emulation_state_memcard_busy))
                 else -> showMessage(getString(R.string.rewind_failed))
             }
+        }
+    }
+
+    /**
+     * The core names a game's cheat file by its CRC, known only once the game runs, so the
+     * cheats go in a few seconds after the boot.
+     */
+    private fun startCheats() {
+        val serial = serial ?: return
+        cheatsJob?.cancel()
+        cheatsJob = lifecycleScope.launch {
+            while (isActive) {
+                if (core.hasActiveVm) {
+                    val cheats = container.cheatRepository.load(serial)
+                    if (withContext(Dispatchers.IO) { core.applyCheats(serial, cheats) }) break
+                }
+                delay(CHEATS_POLL_MS)
+            }
+        }
+    }
+
+    private fun showCheats() {
+        cheatsOpen = true
+        cheatList = null
+        lifecycleScope.launch { cheatList = serial?.let { container.cheatRepository.load(it) }.orEmpty() }
+    }
+
+    private fun closeCheats() {
+        cheatsOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    private fun toggleCheat(id: String, enabled: Boolean) {
+        val serial = serial ?: return
+        // The switch follows the tap at once; the core catches up when it has reloaded.
+        cheatList = cheatList?.map { if (it.id == id) it.copy(enabled = enabled) else it }
+        lifecycleScope.launch {
+            container.cheatRepository.update(serial) { list -> list.map { if (it.id == id) it.copy(enabled = enabled) else it } }
+            val cheats = container.cheatRepository.load(serial)
+            withContext(Dispatchers.IO) { core.applyCheats(serial, cheats) }
         }
     }
 
@@ -575,6 +631,12 @@ class EmulationActivity : ComponentActivity() {
             // The game stays paused (by the menu) while the rewind menu is up.
             menuOpen = false
             showRewind()
+        }
+
+        override fun cheats() {
+            // The game stays paused (by the menu) while the cheats are up.
+            menuOpen = false
+            showCheats()
         }
 
         override fun exitAndResumeLater() {
@@ -691,13 +753,13 @@ class EmulationActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // While the menu is open a controller navigates it: the D-pad moves focus, A clicks, B goes back.
-        if (menuOpen || rewindOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
+        if (menuOpen || rewindOpen || cheatsOpen) return super.dispatchKeyEvent(menuKeyEvent(event))
         return gamepad.onKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         // Unhandled hat motion comes back as D-pad key events, which the menu navigates by.
-        if (menuOpen || rewindOpen) return super.dispatchGenericMotionEvent(event)
+        if (menuOpen || rewindOpen || cheatsOpen) return super.dispatchGenericMotionEvent(event)
         return gamepad.onMotionEvent(event) || super.dispatchGenericMotionEvent(event)
     }
 
@@ -832,6 +894,7 @@ class EmulationActivity : ComponentActivity() {
         private const val EXTRA_FAILED_DRIVER = "com.kira3.scphx.extra.FAILED_DRIVER"
         private const val VM_STOP_WAIT_MS = 5_000L
         private const val VM_POLL_MS = 200L
+        private const val CHEATS_POLL_MS = 500L
         private const val SUSPEND_SAVE_TRIES = 10
         private const val SUSPEND_SAVE_RETRY_MS = 250L
         private const val TOAST_VISIBLE_MS = 3_500L

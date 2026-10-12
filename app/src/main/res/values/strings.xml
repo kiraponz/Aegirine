@@ -465,4 +465,30 @@
     <string name="driver_delete_title">Delete %1$s?</string>
     <string name="driver_delete_text">Games set to use it switch to the global driver.</string>
     <string name="driver_about">Driver packs are .zip files in the adrenotools format, such as Mesa Turnip builds for Adreno GPUs. A driver that fails to load falls back to the system driver. Changes apply the next time a game starts.</string>
+    <string name="settings_cheats">Cheats</string>
+    <string name="settings_cheats_summary">Add codes and switch them on and off for a game</string>
+    <string name="cheats_pick_game">Choose a game</string>
+    <string name="cheats_pick_game_empty">No games with a serial yet. Add your game folder in the library.</string>
+    <string name="menu_cheats">Cheats</string>
+    <string name="cheats_add">Add cheat</string>
+    <string name="cheats_edit">Edit cheat</string>
+    <string name="cheats_import">Import</string>
+    <string name="cheats_name">Name</string>
+    <string name="cheats_code">Code</string>
+    <string name="cheats_code_hint">One line per code: 203F1234 00000001, or a patch= line from a .pnach file</string>
+    <string name="cheats_bad_line">Line %1$d is not a code the core understands</string>
+    <string name="cheats_save">Save</string>
+    <string name="cheats_delete">Delete</string>
+    <string name="cheats_empty">No cheats yet. Add a code, or import a .pnach file.</string>
+    <string name="cheats_about">Cheats take effect a few seconds after the game starts.</string>
+    <string name="cheats_import_none">No cheats found in that file</string>
+    <string name="cheats_menu_empty">No cheats for this game. Add them in the game\'s settings.</string>
+    <plurals name="cheats_imported">
+        <item quantity="one">Added %1$d cheat</item>
+        <item quantity="other">Added %1$d cheats</item>
+    </plurals>
+    <plurals name="cheats_code_lines">
+        <item quantity="one">%1$d code line</item>
+        <item quantity="other">%1$d code lines</item>
+    </plurals>
 </resources>
