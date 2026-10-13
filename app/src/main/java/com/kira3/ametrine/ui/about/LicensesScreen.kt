@@ -157,12 +157,22 @@ private fun paragraphs(text: String): List<String> =
     text.split(Regex("\n\\s*\n")).map { it.trim('\n') }.filter { it.isNotBlank() }.map { paragraph ->
         // Whole texts are often indented (the GPL by two spaces); only indentation beyond that counts.
         val lines = paragraph.trimIndent().lines()
-        // Lists, tables and indented blocks keep their lines.
-        val laidOut = lines.drop(1).any { line ->
-            line.startsWith(" ") || line.startsWith("\t") || listMarker.containsMatchIn(line)
+        buildString {
+            append(lines.first().trimEnd())
+            for ((previous, line) in lines.zipWithNext()) {
+                // A long line was wrapped by its width, so the next one continues it. A short one
+                // (a title, an address) ended there, and a list item always starts its own line.
+                if (previous.trim().length >= WRAPPED_LINE && !listMarker.containsMatchIn(line)) {
+                    append(' ').append(line.trim())
+                } else {
+                    append('\n').append(line.trimEnd())
+                }
+            }
         }
-        if (laidOut) lines.joinToString("\n") else lines.joinToString(" ") { it.trim() }
     }
+
+/** Shortest line taken as wrapped prose; license texts wrap at 70 to 80 columns. */
+private const val WRAPPED_LINE = 50
 
 private val listMarker = Regex("^\\s*([-*•]|\\(?[0-9a-z]{1,3}[.)])\\s")
 
