@@ -15,7 +15,7 @@ import java.io.RandomAccessFile
 
 /**
  * Screenshots of the running game. The core writes the PNG into the app's own folder, which
- * the Files app cannot show, so it is copied into Pictures/SCPHX for the gallery.
+ * the Files app cannot show, so it is copied into Pictures/SCPHX/<serial> for the gallery.
  */
 class Screenshots(private val context: Context, private val core: EmulatorCore) {
     /** Captures the next frame and publishes it. Returns false if it never arrived or could not be copied. */
@@ -24,7 +24,7 @@ class Screenshots(private val context: Context, private val core: EmulatorCore) 
         // The core takes the path as is only when it ends in .png.
         val png = File(dir, "${serial ?: "SCPHX"}_${System.currentTimeMillis()}.png")
         if (!capture(png)) return@withContext false
-        runCatching { publish(png) }
+        runCatching { publish(png, serial) }
             .onFailure { Log.e(TAG, "Could not publish $png", it) }
             .isSuccess
     }
@@ -46,12 +46,12 @@ class Screenshots(private val context: Context, private val core: EmulatorCore) 
         return written
     }
 
-    private fun publish(png: File) {
+    private fun publish(png: File, serial: String?) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, png.name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$ALBUM")
+            put(MediaStore.Images.Media.RELATIVE_PATH, listOfNotNull(Environment.DIRECTORY_PICTURES, ALBUM, serial).joinToString("/"))
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
