@@ -10,3 +10,8 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+# The parts of a Kotlin multifile facade (StringsKt__IndentKt, StringsKt__StringBuilderKt, ...)
+# extend each other and are package-private. R8 moved some of them out of their package while
+# their superclass stayed, and the app crashed at start with IllegalAccessError. Keeping their
+# names keeps them in their package.
+-keep,allowshrinking,allowoptimization class kotlin.**Kt__* { *; }
