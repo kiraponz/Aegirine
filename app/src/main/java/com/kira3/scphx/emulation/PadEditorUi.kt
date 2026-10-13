@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -46,7 +47,8 @@ fun PadEditorBar(
             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
             // The tint has alpha, so the surface cannot work out its text color itself.
             contentColor = MaterialTheme.colorScheme.onSurface,
-            // Upright, the pad fills the lower part of the screen: stay over the picture.
+            // Upright, the pad and the function buttons of the controller layout are in the lower part
+            // of the screen: stay over the picture.
             modifier = Modifier
                 .align(if (landscape) Alignment.Center else Alignment.TopCenter)
                 .widthIn(max = 360.dp)
@@ -54,6 +56,18 @@ fun PadEditorBar(
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.pad_edit_title), style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !editor.controllerMode,
+                        onClick = { editor.editController(false) },
+                        label = { Text(stringResource(R.string.pad_edit_mode_pad)) },
+                    )
+                    FilterChip(
+                        selected = editor.controllerMode,
+                        onClick = { editor.editController(true) },
+                        label = { Text(stringResource(R.string.pad_edit_mode_controller)) },
+                    )
+                }
                 if (selected == null) {
                     Text(
                         stringResource(R.string.pad_edit_hint),

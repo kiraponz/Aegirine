@@ -86,6 +86,8 @@
     <string name="menu_cancel">Cancel</string>
 
     <!-- Touch pad button labels: the names printed on a DualShock 2 -->
+    <string name="pad_edit_mode_pad">Touch pad</string>
+    <string name="pad_edit_mode_controller">With a controller</string>
     <string name="pad_edit_title">Edit pad layout</string>
     <string name="pad_edit_hint">Drag a control to move it. Tap one to change its size.</string>
     <string name="pad_edit_size">Size</string>

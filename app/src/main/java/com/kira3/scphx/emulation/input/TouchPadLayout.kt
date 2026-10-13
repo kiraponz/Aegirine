@@ -86,6 +86,23 @@ internal class TouchPadLayout(
 }
 
 /**
+ * The function buttons alone, for while the touch pad is hidden: in a row at the top left, or the bottom
+ * left upright (where the picture is at the top).
+ */
+internal fun controllerLayout(size: Size, maxUnit: Float): TouchPadLayout {
+    val u = touchPadLayout(size, maxUnit).unit
+    val m = 0.35f * u
+    val gap = 1.25f * u
+    val y = if (size.width >= size.height) m + 0.8f * u else size.height - m - 1.3f * u
+    val first = m + 0.8f * u
+    return TouchPadLayout(
+        u,
+        emptyList(),
+        PadExtra.entries.withIndex().associate { (i, extra) -> extra to Offset(first + i * gap, y) },
+    )
+}
+
+/**
  * Places the controls for an area of [size]. Everything is sized from one unit, so the pad
  * scales with the screen; [maxUnit] keeps it from growing huge on tablets.
  *

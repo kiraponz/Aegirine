@@ -70,22 +70,31 @@ class PadEditor(initial: PadLayoutEdits) {
     var selected by mutableStateOf<String?>(null)
         internal set
 
+    /** Editing the function buttons as they sit while the pad is hidden, instead of the pad. */
+    var controllerMode by mutableStateOf(false)
+        private set
+
+    fun editController(controller: Boolean) {
+        controllerMode = controller
+        selected = null
+    }
+
     internal fun move(landscape: Boolean, id: String, dx: Float, dy: Float) = change(landscape, id) {
         it.copy(x = it.x + dx, y = it.y + dy)
     }
 
     fun setScale(landscape: Boolean, id: String, scale: Float) = change(landscape, id) { it.copy(scale = scale) }
 
-    fun scaleOf(landscape: Boolean, id: String): Float = edits.of(landscape)[id]?.scale ?: 1f
+    fun scaleOf(landscape: Boolean, id: String): Float = edits.of(landscape, controllerMode)[id]?.scale ?: 1f
 
-    /** Puts every control of this orientation back where the built-in layout has it. */
+    /** Puts every control of this orientation (or of the controller layout) back where the built-in layout has it. */
     fun reset(landscape: Boolean) {
-        edits = edits.with(landscape, emptyMap())
+        edits = edits.with(landscape, emptyMap(), controllerMode)
     }
 
     private fun change(landscape: Boolean, id: String, transform: (ControlEdit) -> ControlEdit) {
-        val current = edits.of(landscape)
-        edits = edits.with(landscape, current + (id to transform(current[id] ?: ControlEdit())))
+        val current = edits.of(landscape, controllerMode)
+        edits = edits.with(landscape, current + (id to transform(current[id] ?: ControlEdit())), controllerMode)
     }
 }
 
@@ -102,7 +111,7 @@ class PadEditor(initial: PadLayoutEdits) {
  * [opacity] fades the whole pad; [haptics] turns off the vibration on a press.
  *
  * [fastForwardButton], if given, is placed where the layout leaves room for it, and stays
- * while the pad is hidden. [edits] are the user's changes to the layout; with an [editor] they are
+ * while the pad is hidden, moved to the top left (or wherever the user put it). [edits] are the user's changes to the layout; with an [editor] they are
  * the editor's, and the pad is drawn for editing instead of playing.
  */
 @Composable
@@ -141,9 +150,11 @@ fun TouchPad(
         val maxUnit = with(LocalDensity.current) { MAX_UNIT.toPx() }
         val area = Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
         val landscape = area.width >= area.height
-        val activeEdits = (editor?.edits ?: edits).of(landscape)
-        val layout = remember(constraints.maxWidth, constraints.maxHeight, maxUnit, floatingSticks, activeEdits) {
-            touchPadLayout(area, maxUnit)
+        // Without the pad (a controller is in use) only the function buttons are shown, in a layout of their own.
+        val controllerMode = editor?.controllerMode ?: !visible
+        val activeEdits = (editor?.edits ?: edits).of(landscape, controllerMode)
+        val layout = remember(constraints.maxWidth, constraints.maxHeight, maxUnit, floatingSticks, activeEdits, controllerMode) {
+            (if (controllerMode) controllerLayout(area, maxUnit) else touchPadLayout(area, maxUnit))
                 .let { if (floatingSticks) it.withoutSticks() else it }
                 .edited(activeEdits, area)
         }

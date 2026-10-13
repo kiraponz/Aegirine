@@ -17,18 +17,29 @@ import java.io.File
 @Serializable
 data class ControlEdit(val x: Float = 0f, val y: Float = 0f, val scale: Float = 1f)
 
-/** The edits of a pad layout, kept apart for landscape and portrait. Keys are control ids (see TouchPadLayout.kt). */
+/**
+ * The edits of a pad layout, kept apart for landscape and portrait. Keys are control ids (see TouchPadLayout.kt).
+ * [controller] is for the function buttons while the touch pad is hidden (a controller is in use), for either orientation.
+ */
 @Serializable
 data class PadLayoutEdits(
     val landscape: Map<String, ControlEdit> = emptyMap(),
     val portrait: Map<String, ControlEdit> = emptyMap(),
+    val controller: Map<String, ControlEdit> = emptyMap(),
 ) {
-    fun of(landscape: Boolean): Map<String, ControlEdit> = if (landscape) this.landscape else portrait
+    fun of(landscape: Boolean, controller: Boolean = false): Map<String, ControlEdit> = when {
+        controller -> this.controller
+        landscape -> this.landscape
+        else -> portrait
+    }
 
-    fun with(landscape: Boolean, edits: Map<String, ControlEdit>): PadLayoutEdits =
-        if (landscape) copy(landscape = edits) else copy(portrait = edits)
+    fun with(landscape: Boolean, edits: Map<String, ControlEdit>, controller: Boolean = false): PadLayoutEdits = when {
+        controller -> copy(controller = edits)
+        landscape -> copy(landscape = edits)
+        else -> copy(portrait = edits)
+    }
 
-    val isEmpty: Boolean get() = landscape.isEmpty() && portrait.isEmpty()
+    val isEmpty: Boolean get() = landscape.isEmpty() && portrait.isEmpty() && this.controller.isEmpty()
 }
 
 /**
