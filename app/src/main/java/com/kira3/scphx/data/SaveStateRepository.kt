@@ -24,16 +24,21 @@ data class SaveStateFile(
     val modified: Long,
 )
 
-/** A save-state file picked to import: whose it is, and the slot its name says. */
-data class SaveStateImport(val uri: Uri, val serial: String, val crc: String, val slot: Int, val replaces: Boolean)
+/**
+ * A save-state file picked to import, with what its name says about it. A name that was changed on the
+ * way in (a copy suffix, other separators) still gives what can be read from it; the rest is null and the
+ * user chooses the game and slot.
+ */
+data class SaveStateImport(val uri: Uri, val name: String, val serial: String?, val crc: String?, val slot: Int?)
 
 enum class SaveStateResult { Ok, Invalid, Failed, Busy }
 
 /**
  * The numbered save states in `<dataDir>/sstates`. A state file is named by the core
  * `<serial> (<CRC>).<slot>.p2s` and is a zip (the machine's memory plus a screenshot). Exporting copies
- * the file out under that name, and importing reads the game and slot from the name again, so a
- * file renamed on the way in is not accepted.
+ * the file out under that name, and importing reads the game and slot from the name again. The core
+ * names a game's state files by its CRC, which the file itself does not hold, so when the name was
+ * changed on the way in the caller supplies the game (and its CRC) and the slot.
  */
 class SaveStateRepository(context: Context, private val core: EmulatorCore) {
     private val appContext = context.applicationContext
@@ -71,25 +76,28 @@ class SaveStateRepository(context: Context, private val core: EmulatorCore) {
         }
     }
 
-    /** Reads the name of the file at [uri] and what it would replace; null if it is not a state file of the core's naming. */
+    /** Reads what the name of the file at [uri] says about it; null if the name cannot be read. */
     suspend fun inspect(uri: Uri): SaveStateImport? = withContext(Dispatchers.IO) {
         val name = displayName(uri) ?: return@withContext null
-        val match = NAME.matchEntire(name) ?: return@withContext null
-        val slot = match.groupValues[3].toInt()
-        if (slot !in EmulatorCore.SAVE_STATE_SLOTS) return@withContext null
-        val serial = match.groupValues[1]
-        val crc = match.groupValues[2]
-        SaveStateImport(uri, serial, crc, slot, File(core.saveStatesDir, fileName(serial, crc, slot)).exists())
+        NAME.matchEntire(name)?.let { match ->
+            val slot = match.groupValues[3].toInt().takeIf { it in EmulatorCore.SAVE_STATE_SLOTS }
+            return@withContext SaveStateImport(uri, name, match.groupValues[1], match.groupValues[2].uppercase(), slot)
+        }
+        // Renamed: take whatever of the three parts is still recognizable.
+        val serial = LOOSE_SERIAL.find(name)?.value?.uppercase()
+        val crc = LOOSE_CRC.findAll(name).lastOrNull()?.groupValues?.get(1)?.uppercase()
+        val slot = LOOSE_SLOT.find(name)?.groupValues?.get(1)?.toInt()?.takeIf { it in EmulatorCore.SAVE_STATE_SLOTS }
+        SaveStateImport(uri, name, serial, crc, slot)
     }
 
-    /** Puts the file in [slot] of the game, which can be another slot than its name says. */
-    suspend fun import(import: SaveStateImport, slot: Int): SaveStateResult = withContext(Dispatchers.IO) {
+    /** Puts the file in [slot] of the game with [serial] and [crc]. */
+    suspend fun import(uri: Uri, serial: String, crc: String, slot: Int): SaveStateResult = withContext(Dispatchers.IO) {
         if (isGameProcessRunning(appContext)) return@withContext SaveStateResult.Busy
-        val target = File(core.saveStatesDir, fileName(import.serial, import.crc, slot))
+        val target = File(core.saveStatesDir, fileName(serial, crc, slot))
         val temp = File(core.saveStatesDir, target.name + ".importing")
         try {
             core.saveStatesDir.mkdirs()
-            val input = appContext.contentResolver.openInputStream(import.uri) ?: return@withContext SaveStateResult.Failed
+            val input = appContext.contentResolver.openInputStream(uri) ?: return@withContext SaveStateResult.Failed
             input.use { stream -> temp.outputStream().use { stream.copyTo(it) } }
             // A state is a zip with the screenshot in it; anything else is not one.
             val valid = try {
@@ -138,5 +146,8 @@ class SaveStateRepository(context: Context, private val core: EmulatorCore) {
         private const val SCREENSHOT = "Screenshot.png"
         private const val VERSION_ENTRY = "PCSX2 Savestate Version.id"
         private val NAME = Regex("^(.+) \\(([0-9A-Fa-f]{8})\\)\\.(\\d{2})\\.p2s$")
+        private val LOOSE_SERIAL = Regex("[A-Za-z]{4}-\\d{5}")
+        private val LOOSE_CRC = Regex("\\(([0-9A-Fa-f]{8})\\)")
+        private val LOOSE_SLOT = Regex("\\)\\.(\\d{1,2})(?!\\d)")
     }
 }

@@ -473,6 +473,7 @@ class EmulationActivity : ComponentActivity() {
         customDriverInUse = useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
         startCheats()
+        startCrcRecord()
 
         Log.i(TAG, "Booting $gameUri (serial $serial)" + if (suspended != null) " from ${suspended.name}" else "")
         emulationThread = thread(name = "Emulation") {
@@ -744,6 +745,25 @@ class EmulationActivity : ComponentActivity() {
                 if (core.hasActiveVm) {
                     val cheats = container.cheatRepository.load(serial)
                     if (withContext(Dispatchers.IO) { core.applyCheats(serial, cheats) }) break
+                }
+                delay(CHEATS_POLL_MS)
+            }
+        }
+    }
+
+    /** Notes the game's CRC once the core knows it, so a save state file can be imported for the game later. */
+    private fun startCrcRecord() {
+        val key = recordKey ?: return
+        if (serial == null) return
+        lifecycleScope.launch {
+            while (isActive) {
+                if (core.hasActiveVm) {
+                    val crc = core.gameCrc.uppercase()
+                    if (crc.length == 8 && crc != "00000000") {
+                        runCatching { container.gameRecordRepository.update(key) { it.copy(crc = crc) } }
+                            .onFailure { Log.w(TAG, "Could not record the game's CRC", it) }
+                        break
+                    }
                 }
                 delay(CHEATS_POLL_MS)
             }

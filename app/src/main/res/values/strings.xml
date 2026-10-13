@@ -854,16 +854,19 @@
     <string name="states_export">Export</string>
     <string name="states_delete">Delete</string>
     <string name="states_empty">No game has a save state yet</string>
-    <string name="states_about">Export keeps the file name, which tells the game and the slot. Import a file with its name unchanged</string>
+    <string name="states_about">Export keeps the file name, which tells the game and the slot. If the name was changed, choose the game and slot when importing</string>
     <string name="states_delete_title">Delete slot %1$d?</string>
     <string name="states_delete_text">The state is deleted from this device</string>
     <string name="states_import_title">Import save state</string>
+    <string name="states_import_game">Game</string>
     <string name="states_import_slot">Slot</string>
+    <string name="states_import_unknown_crc">Start this game once, so the app can learn its ID, then import again</string>
+    <string name="states_import_renamed">The file name is not the original, so choose the game and slot</string>
     <string name="states_import_replaces">Slot %1$d already has a state, which is replaced</string>
     <string name="states_exported">Exported</string>
     <string name="states_imported">Imported</string>
     <string name="states_deleted">Deleted</string>
-    <string name="states_invalid">That is not a save state of this app, or its name was changed</string>
+    <string name="states_invalid">That is not a save state</string>
     <string name="states_failed">That did not work</string>
     <string name="states_busy">Quit the game first: it is using the save states</string>
 </resources>

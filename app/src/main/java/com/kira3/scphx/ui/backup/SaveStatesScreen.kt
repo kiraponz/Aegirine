@@ -6,6 +6,11 @@ import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -206,20 +211,49 @@ fun SaveStatesScreen(
     }
 
     state.pending?.let { pending ->
-        var slot by remember(pending) { mutableIntStateOf(pending.file.slot) }
+        var serial by remember(pending) { mutableStateOf(pending.serial) }
+        var slot by remember(pending) { mutableIntStateOf(pending.slot ?: EmulatorCore.SAVE_STATE_SLOTS.first) }
+        val game = pending.games.firstOrNull { it.serial == serial }
+        val exact = pending.file.serial != null && pending.file.crc != null && pending.file.slot != null
         AlertDialog(
             onDismissRequest = viewModel::cancelImport,
             title = { Text(stringResource(R.string.states_import_title)) },
             text = {
                 androidx.compose.foundation.layout.Column {
-                    Text(pending.title ?: pending.file.serial, style = MaterialTheme.typography.bodyLarge)
+                    if (!exact) {
+                        Text(
+                            stringResource(R.string.states_import_renamed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    Text(stringResource(R.string.states_import_game), style = MaterialTheme.typography.labelLarge)
+                    LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                        items(pending.games, key = { it.serial }) { item ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { serial = item.serial },
+                            ) {
+                                RadioButton(selected = item.serial == serial, onClick = { serial = item.serial })
+                                Text(item.title ?: item.serial, maxLines = 2, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                     Text(stringResource(R.string.states_import_slot), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (n in EmulatorCore.SAVE_STATE_SLOTS) {
                             FilterChip(selected = n == slot, onClick = { slot = n }, label = { Text(n.toString()) })
                         }
                     }
-                    if (slot in pending.takenSlots) {
+                    if (game != null && game.crc == null) {
+                        Text(
+                            stringResource(R.string.states_import_unknown_crc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    } else if (game != null && slot in game.takenSlots) {
                         Text(
                             stringResource(R.string.states_import_replaces, slot),
                             style = MaterialTheme.typography.bodySmall,
@@ -229,7 +263,11 @@ fun SaveStatesScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { viewModel.import(slot) }) { Text(stringResource(R.string.states_import)) } },
+            confirmButton = {
+                TextButton(onClick = { game?.let { viewModel.import(it, slot) } }, enabled = game?.crc != null) {
+                    Text(stringResource(R.string.states_import))
+                }
+            },
             dismissButton = { TextButton(onClick = viewModel::cancelImport) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
