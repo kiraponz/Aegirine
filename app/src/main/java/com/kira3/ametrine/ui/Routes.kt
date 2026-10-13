@@ -74,3 +74,15 @@ data object BackupRoute : NavKey
 /** The save states games have left, exported and imported here, a page of the global settings. */
 @Serializable
 data object SaveStatesRoute : NavKey
+
+/** The app's version, source and licenses, a page of the global settings. */
+@Serializable
+data object AboutRoute : NavKey
+
+/** What the app includes from others, opened from [AboutRoute]. */
+@Serializable
+data object LicensesRoute : NavKey
+
+/** One license text, opened from [AboutRoute] or [LicensesRoute]. */
+@Serializable
+data class LicenseRoute(val id: String) : NavKey

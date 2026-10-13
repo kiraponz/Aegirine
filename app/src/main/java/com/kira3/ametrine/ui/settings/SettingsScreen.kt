@@ -88,6 +88,8 @@ fun SettingsHomeScreen(
     onOpenBackup: () -> Unit,
     statesSelected: Boolean,
     onOpenStates: () -> Unit,
+    aboutSelected: Boolean,
+    onOpenAbout: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(serial)),
 ) {
@@ -197,6 +199,18 @@ fun SettingsHomeScreen(
                         trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
                         supportingContent = { Text(stringResource(R.string.settings_backup_summary)) },
                     ) { Text(stringResource(R.string.settings_backup)) }
+                }
+                item(key = "about") {
+                    SegmentedListItem(
+                        selected = aboutSelected,
+                        onClick = onOpenAbout,
+                        shapes = ListItemDefaults.segmentedShapes(0, 1),
+                        colors = settingsListColors(highlightSelected = true),
+                        modifier = Modifier.animateItem().padding(top = 12.dp),
+                        leadingContent = { ShapedIcon(MaterialShapes.SoftBurst.toShape(), R.drawable.ic_info, categories.size + 4) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                        supportingContent = { Text(stringResource(R.string.settings_about_summary)) },
+                    ) { Text(stringResource(R.string.settings_about)) }
                 }
             }
         }

@@ -14,6 +14,9 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.kira3.ametrine.R
+import com.kira3.ametrine.ui.about.AboutScreen
+import com.kira3.ametrine.ui.about.LicenseScreen
+import com.kira3.ametrine.ui.about.LicensesScreen
 import com.kira3.ametrine.ui.backup.BackupScreen
 import com.kira3.ametrine.ui.backup.SaveStatesScreen
 import com.kira3.ametrine.ui.bios.BiosScreen
@@ -42,7 +45,7 @@ fun AmetrineApp() {
     // Beside the settings list, opening something replaces what is open in the detail pane.
     fun openDetail(route: NavKey) {
         val last = backStack.lastOrNull()
-        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute || last is MacrosRoute || last is MacroGamesRoute || last is BackupRoute || last is SaveStatesRoute) {
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute || last is MacrosRoute || last is MacroGamesRoute || last is BackupRoute || last is SaveStatesRoute || last is AboutRoute || last is LicensesRoute || last is LicenseRoute) {
             while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
         }
         backStack.add(route)
@@ -115,6 +118,8 @@ fun AmetrineApp() {
                     onOpenBackup = { openDetail(BackupRoute) },
                     statesSelected = backStack.lastOrNull() is SaveStatesRoute,
                     onOpenStates = { openDetail(SaveStatesRoute) },
+                    aboutSelected = backStack.lastOrNull().let { it is AboutRoute || it is LicensesRoute || it is LicenseRoute },
+                    onOpenAbout = { openDetail(AboutRoute) },
                     onOpenCheats = {
                         // A game's settings go straight to its cheats; the global ones pick a game first.
                         openDetail(route.serial?.let { CheatsRoute(it, route.gameTitle) } ?: CheatGamesRoute)
@@ -202,6 +207,28 @@ fun AmetrineApp() {
                 metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
             ) {
                 SaveStatesScreen(onBack = { backStack.removeLastOrNull() })
+            }
+            entry<AboutRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
+                AboutScreen(
+                    onOpenLicense = { backStack.add(LicenseRoute(it)) },
+                    onOpenLicenses = { backStack.add(LicensesRoute) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<LicensesRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
+                LicensesScreen(
+                    onOpenLicense = { backStack.add(LicenseRoute(it)) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<LicenseRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) { route ->
+                LicenseScreen(id = route.id, onBack = { backStack.removeLastOrNull() })
             }
             entry<GpuDriverRoute>(
                 metadata = { route ->
