@@ -98,6 +98,26 @@
     <string name="settings_title">Settings</string>
 
     <!-- Settings -->
+    <string name="library_search">Search</string>
+    <string name="library_search_close">Close search</string>
+    <string name="library_search_hint">Title or serial</string>
+    <string name="library_no_matches">No games match</string>
+    <string name="library_sort">Sort</string>
+    <string name="library_sort_recently_played">Recently played</string>
+    <string name="library_sort_title">Title</string>
+    <string name="library_sort_play_time">Play time</string>
+    <string name="library_sort_recently_added">Recently added</string>
+    <string name="library_sort_size">Size</string>
+    <string name="library_favorite">Add to favorites</string>
+    <string name="library_unfavorite">Remove from favorites</string>
+    <string name="library_rename">Rename</string>
+    <string name="library_rename_confirm">Save</string>
+    <string name="library_reset_title">Reset title</string>
+    <string name="library_played">Played %1$s · %2$s</string>
+    <string name="library_play_time_short">under a minute</string>
+    <string name="library_play_time_minutes">%1$d min</string>
+    <string name="library_play_time_hours">%1$d h %2$d min</string>
+    <string name="library_resumable">Suspended game: resumes where you left off</string>
     <string name="library_game_settings">Game settings</string>
     <string name="library_message_no_serial">This game has no serial, so it cannot have its own settings</string>
     <string name="settings_game_subtitle">Game settings</string>

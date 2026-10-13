@@ -408,6 +408,12 @@ class EmulatorCore(context: Context) {
             file.name.startsWith("$serial (") && file.name.endsWith(".resume.p2s")
         }?.maxByOrNull { it.lastModified() }
 
+    /** Serials that have a suspend state to resume from. Blocking I/O. */
+    fun resumableSerials(): Set<String> =
+        File(dataDir, SAVE_STATE_DIR).listFiles { file -> file.name.endsWith(".resume.p2s") }
+            ?.mapTo(HashSet()) { it.name.substringBefore(" (") }
+            .orEmpty()
+
     /** Makes the next [runVm] start from the save state at [file], or from the beginning for null. */
     fun setBootSaveState(file: File?) = NativeApp.setBootSaveState(file?.absolutePath.orEmpty())
 

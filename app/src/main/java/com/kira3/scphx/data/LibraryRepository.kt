@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -28,12 +29,39 @@ data class Game(
     val sizeBytes: Long,
     /** The GameDB name for [serial], if the database knows the game. */
     val dbTitle: String? = null,
+    val lastModified: Long = 0,
+    val record: GameRecord = GameRecord(),
+    /** Whether "Exit and resume later" left a state for the next start. */
+    val resumable: Boolean = false,
 ) {
-    /** The GameDB name, or the file name without its extension. */
-    val title: String get() = dbTitle ?: fileName.substringBeforeLast('.')
+    /** The user's title, else the GameDB name, else the file name without its extension. */
+    val title: String get() = record.customTitle ?: dbTitle ?: fileName.substringBeforeLast('.')
+
+    /** Key in [GameRecordRepository]. */
+    val recordKey: String get() = GameRecordRepository.keyOf(serial, uri.toString())
 
     /** Upper-case extension, e.g. "CHD". */
     val format: String get() = fileName.substringAfterLast('.', "").uppercase()
+}
+
+/** How the library orders its games. Ties fall back to the title. */
+enum class LibrarySort {
+    RecentlyPlayed, Title, PlayTime, RecentlyAdded, Size;
+
+    fun comparator(): Comparator<Game> {
+        val byTitle = compareBy<Game> { it.title.lowercase() }
+        return when (this) {
+            Title -> byTitle
+            RecentlyPlayed -> compareByDescending<Game> { it.record.lastPlayed }.then(byTitle)
+            PlayTime -> compareByDescending<Game> { it.record.playSeconds }.then(byTitle)
+            RecentlyAdded -> compareByDescending<Game> { it.lastModified }.then(byTitle)
+            Size -> compareByDescending<Game> { it.sizeBytes }.then(byTitle)
+        }
+    }
+
+    companion object {
+        fun fromName(name: String?): LibrarySort = entries.firstOrNull { it.name == name } ?: RecentlyPlayed
+    }
 }
 
 /**
@@ -45,6 +73,7 @@ class LibraryRepository(
     private val core: EmulatorCore,
     private val preferences: AppPreferences,
     private val dao: GameDao,
+    private val records: GameRecordRepository,
 ) {
     private val contentResolver = context.applicationContext.contentResolver
     private val refreshLock = Mutex()
@@ -53,10 +82,36 @@ class LibraryRepository(
     /** SAF tree URI of the game folder, or null before one is picked. */
     val gameFolder: Flow<Uri?> = preferences.gameFolder
 
-    /** Cached games, sorted by name. */
-    val games: Flow<List<Game>> = dao.observeAll().map { rows ->
-        rows.map { it.toGame() }.sortedBy { it.title.lowercase() }
+    private val resumeChanges = MutableStateFlow(0)
+
+    /** Cached games with their records, in no particular order; see [LibrarySort]. */
+    val games: Flow<List<Game>> = combine(dao.observeAll(), records.records, resumeChanges) { rows, records, _ ->
+        val resumable = withContext(Dispatchers.IO) { core.resumableSerials() }
+        rows.map { row ->
+            val game = row.toGame()
+            game.copy(record = records[game.recordKey] ?: GameRecord(), resumable = game.serial in resumable)
+        }
     }
+
+    /** Re-reads what the :emu process wrote (play time, suspend states) while the game was running. */
+    fun reloadRecords() {
+        records.refresh()
+        resumeChanges.value++
+    }
+
+    suspend fun setFavorite(game: Game, favorite: Boolean) =
+        records.update(game.recordKey) { it.copy(favorite = favorite) }
+
+    /** A blank [title] goes back to the GameDB name or file name. */
+    suspend fun setCustomTitle(game: Game, title: String) =
+        records.update(game.recordKey) { it.copy(customTitle = title.trim().ifEmpty { null }) }
+
+    /** Called when a game is started, so "recently played" is right before the first play time arrives. */
+    suspend fun markPlayed(game: Game) = records.update(game.recordKey) { it.copy(lastPlayed = System.currentTimeMillis()) }
+
+    val sort: Flow<LibrarySort> = preferences.librarySort.map { LibrarySort.fromName(it) }
+
+    suspend fun setSort(sort: LibrarySort) = preferences.setLibrarySort(sort.name)
 
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
@@ -151,6 +206,7 @@ class LibraryRepository(
         serialRead = serialRead,
         sizeBytes = sizeBytes,
         dbTitle = dbTitle,
+        lastModified = lastModified,
     )
 
     private companion object {

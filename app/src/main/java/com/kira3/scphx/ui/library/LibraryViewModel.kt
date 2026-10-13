@@ -12,6 +12,7 @@ import com.kira3.scphx.data.Bios
 import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.Game
 import com.kira3.scphx.data.LibraryRepository
+import com.kira3.scphx.data.LibrarySort
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,10 @@ data class LibraryUiState(
     /** Null until the cached list has been read. */
     val games: List<Game>? = null,
     val refreshing: Boolean = false,
+    val sort: LibrarySort = LibrarySort.RecentlyPlayed,
+    val query: String = "",
+    /** Games in the folder before the search; zero shows the empty-folder state rather than "no matches". */
+    val gameCount: Int = 0,
     val launchRequest: LaunchRequest? = null,
     val settingsRequest: GameSettingsRequest? = null,
     val message: LibraryMessage? = null,
@@ -51,14 +56,36 @@ class LibraryViewModel(
         libraryRepository.gameFolder,
     ) { games, folder -> if (folder == null) emptyList() else games }
 
+    private val query = MutableStateFlow("")
+
+    /** Favorites first, then the chosen order; only games matching the search. */
+    private val shown = combine(games, libraryRepository.sort, query) { games, sort, query ->
+        val words = query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
+        val matching = games.filter { game ->
+            words.all { word ->
+                word in game.title.lowercase() ||
+                    word in game.fileName.lowercase() ||
+                    game.serial?.lowercase()?.contains(word) == true
+            }
+        }
+        Triple(matching.sortedWith(compareByDescending<Game> { it.record.favorite }.then(sort.comparator())), games.size, sort)
+    }
+
     val uiState: StateFlow<LibraryUiState> = combine(
         biosRepository.selected.catch { emit(null) },
         libraryRepository.gameFolder,
-        games,
+        shown,
         libraryRepository.refreshing,
         transient,
-    ) { bios, folder, games, refreshing, transient ->
-        transient.copy(bios = bios, hasGameFolder = folder != null, games = games, refreshing = refreshing)
+    ) { bios, folder, shown, refreshing, transient ->
+        transient.copy(
+            bios = bios,
+            hasGameFolder = folder != null,
+            games = shown.first,
+            gameCount = shown.second,
+            sort = shown.third,
+            refreshing = refreshing,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     init {
@@ -75,6 +102,26 @@ class LibraryViewModel(
         }
     }
 
+    /** Picks up what the :emu process wrote while a game was running. Call when the library comes back. */
+    fun reloadRecords() = libraryRepository.reloadRecords()
+
+    fun onSortSelected(sort: LibrarySort) {
+        viewModelScope.launch { libraryRepository.setSort(sort) }
+    }
+
+    fun onQueryChanged(text: String) {
+        query.value = text
+        transient.update { it.copy(query = text) }
+    }
+
+    fun onFavoriteToggled(game: Game) {
+        viewModelScope.launch { libraryRepository.setFavorite(game, !game.record.favorite) }
+    }
+
+    fun onRenamed(game: Game, title: String) {
+        viewModelScope.launch { libraryRepository.setCustomTitle(game, title) }
+    }
+
     fun onGameFolderPicked(uri: Uri) {
         viewModelScope.launch {
             libraryRepository.setGameFolder(uri)
@@ -89,6 +136,7 @@ class LibraryViewModel(
         }
         viewModelScope.launch {
             val serial = readSerial(game) ?: return@launch
+            runCatching { libraryRepository.markPlayed(game.copy(serial = serial.value)) }
             transient.update { it.copy(launchRequest = LaunchRequest(game.uri, serial.value)) }
         }
     }

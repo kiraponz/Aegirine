@@ -22,6 +22,13 @@ class AppPreferences(context: Context) {
     /** File name of the selected BIOS inside EmulatorCore.biosDir. */
     val biosFileName: Flow<String?> = dataStore.data.map { prefs -> prefs[BIOS_FILE_NAME] }
 
+    /** [com.kira3.scphx.data.LibrarySort] name; null until the user picks one. */
+    val librarySort: Flow<String?> = dataStore.data.map { prefs -> prefs[LIBRARY_SORT] }
+
+    suspend fun setLibrarySort(name: String) {
+        dataStore.edit { it[LIBRARY_SORT] = name }
+    }
+
     suspend fun setGameFolder(uri: Uri) {
         dataStore.edit { it[GAME_FOLDER] = uri.toString() }
     }
@@ -36,6 +43,7 @@ class AppPreferences(context: Context) {
 
     private companion object {
         val GAME_FOLDER = stringPreferencesKey("game_folder")
+        val LIBRARY_SORT = stringPreferencesKey("library_sort")
         val BIOS_FILE_NAME = stringPreferencesKey("bios_file_name")
     }
 }

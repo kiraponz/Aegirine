@@ -40,6 +40,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.kira3.scphx.R
+import com.kira3.scphx.data.GameRecordRepository
 import com.kira3.scphx.data.GpuDriver
 import com.kira3.scphx.ScphxApplication
 import com.kira3.scphx.ui.theme.ScphxTheme
@@ -116,6 +117,10 @@ class EmulationActivity : ComponentActivity() {
     private var settings by mutableStateOf<EmulatorSettings?>(null)
 
     private var serial: String? = null
+
+    /** Key of this game in [GameRecordRepository]; null for the BIOS menu. */
+    private var recordKey: String? = null
+    private var visibleSince = 0L
 
     /** Layout size of the game view; the output buffer is scaled from this. */
     private var viewWidth = 0
@@ -198,6 +203,8 @@ class EmulationActivity : ComponentActivity() {
         enterImmersiveMode()
 
         serial = intent.getStringExtra(EXTRA_SERIAL)
+        // The BIOS menu (empty URI) isn't a game.
+        if (gameUri != Uri.EMPTY) recordKey = GameRecordRepository.keyOf(serial, gameUri.toString())
         systemDriverForced = intent.getBooleanExtra(EXTRA_SYSTEM_DRIVER, false)
         intent.getStringExtra(EXTRA_FAILED_DRIVER)?.let { name ->
             Toast.makeText(this, getString(R.string.emulation_driver_failed, name), Toast.LENGTH_LONG).show()
@@ -1046,6 +1053,7 @@ class EmulationActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        visibleSince = SystemClock.elapsedRealtime()
         if (emulationThread == null) return
         core.setAppBackgrounded(false)
         lifecycleScope.launch {
@@ -1093,6 +1101,7 @@ class EmulationActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        recordPlayTime()
         rumble.stop()
         stopRecording()
         if (emulationThread == null) return
@@ -1106,6 +1115,16 @@ class EmulationActivity : ComponentActivity() {
         if (serial != null && core.hasActiveVm && !stateBusy) {
             suspendSave = lifecycleScope.launch { saveSuspendState() }
         }
+    }
+
+    /** Adds the time since [onStart] to the game's play time, and marks it as just played. */
+    private fun recordPlayTime() {
+        val key = recordKey ?: return
+        if (visibleSince == 0L) return
+        val seconds = (SystemClock.elapsedRealtime() - visibleSince) / 1000
+        visibleSince = 0L
+        runCatching { container.gameRecordRepository.addPlayTimeBlocking(key, seconds) }
+            .onFailure { Log.w(TAG, "Could not record play time", it) }
     }
 
     override fun onDestroy() {
