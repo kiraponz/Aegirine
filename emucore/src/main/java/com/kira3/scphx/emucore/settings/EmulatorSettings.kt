@@ -94,6 +94,8 @@ data class ControlsSettings(
     val padOpacity: Int = 100,
     /** Vibrate when a button is pressed. */
     val padHaptics: Boolean = true,
+    /** Seconds without a touch after which the pad and the function buttons fade (1..30); above 30 they never do. */
+    val padIdleSeconds: Int = 15,
     /** Stick dead zone of a physical controller, as a percent of the stick's travel. */
     val stickDeadzone: Int = 15,
     /** How far a physical controller's analog trigger must go to press L2/R2, as a percent. */

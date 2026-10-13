@@ -172,6 +172,7 @@
     <string name="settings_unit_percent">%1$d%%</string>
     <string name="settings_unit_ms">%1$d ms</string>
     <string name="settings_unit_fps">%1$d FPS</string>
+    <string name="settings_unit_seconds">%1$d s</string>
     <string name="settings_unit_minutes">%1$d min</string>
     <string name="settings_experimental_summary">Experimental. Breaks some games</string>
     <string name="settings_graphics">Graphics</string>
@@ -189,6 +190,8 @@
     <string name="settings_opt_stick_fixed">Fixed</string>
     <string name="settings_opt_stick_floating">Floating</string>
     <string name="settings_pad_opacity">Pad opacity</string>
+    <string name="settings_pad_idle">Fade when not touched</string>
+    <string name="settings_pad_idle_summary">Makes the pad and the function buttons more transparent after this long without a touch</string>
     <string name="settings_pad_haptics">Vibrate on press</string>
     <string name="settings_pad_layout">Pad layout</string>
     <string name="settings_pad_layout_summary">Move and resize the buttons of the touch pad</string>

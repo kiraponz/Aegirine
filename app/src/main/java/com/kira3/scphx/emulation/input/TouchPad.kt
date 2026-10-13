@@ -9,7 +9,13 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -110,6 +116,9 @@ class PadEditor(initial: PadLayoutEdits) {
  * with the shape [gameAspect] (width / height; null when it fills the screen).
  * [opacity] fades the whole pad; [haptics] turns off the vibration on a press.
  *
+ * After [idleSeconds] without a touch (0 = never) the pad and the function buttons turn more transparent,
+ * until the next touch.
+ *
  * [fastForwardButton], if given, is placed where the layout leaves room for it, and stays
  * while the pad is hidden, moved to the top left (or wherever the user put it). [edits] are the user's changes to the layout; with an [editor] they are
  * the editor's, and the pad is drawn for editing instead of playing.
@@ -131,6 +140,7 @@ fun TouchPad(
     haptics: Boolean = true,
     edits: PadLayoutEdits = PadLayoutEdits(),
     editor: PadEditor? = null,
+    idleSeconds: Int = 0,
 ) {
     val view = LocalView.current
     val currentHaptics by rememberUpdatedState(haptics)
@@ -142,10 +152,40 @@ fun TouchPad(
     }
     val currentOnShowRequest by rememberUpdatedState(onShowRequest)
 
+    // Whether a finger is down, sent from every touch the pad area gets; it fades after a while without one.
+    val touches = remember { Channel<Boolean>(Channel.CONFLATED) }
+    var idle by remember { mutableStateOf(false) }
+    val editing = editor != null
+    LaunchedEffect(idleSeconds, editing) {
+        idle = false
+        if (idleSeconds <= 0 || editing) return@LaunchedEffect
+        var down = false
+        while (true) {
+            // A held finger keeps the pad awake, as does the time before the first timeout.
+            val next = if (down || idle) touches.receive() else withTimeoutOrNull(idleSeconds * 1000L) { touches.receive() }
+            if (next == null) {
+                idle = true
+            } else {
+                idle = false
+                down = next
+            }
+        }
+    }
+    val idleFactor by animateFloatAsState(if (idle) IDLE_ALPHA else 1f, tween(600), label = "padIdle")
+
     BoxWithConstraints(
         modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.displayCutout),
+            .windowInsetsPadding(WindowInsets.displayCutout)
+            .pointerInput(touches) {
+                // Only watches, on the way down, so every control still gets its touch.
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        touches.trySend(event.changes.any { it.pressed })
+                    }
+                }
+            },
     ) {
         val maxUnit = with(LocalDensity.current) { MAX_UNIT.toPx() }
         val area = Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
@@ -166,7 +206,7 @@ fun TouchPad(
         Canvas(
             Modifier
                 .fillMaxSize()
-                .alpha(opacity)
+                .alpha(opacity * idleFactor)
                 .pointerInput(editor, layout.takeIf { editor == null }, visible, floatingSticks, gameAspect) {
                     if (editor != null) {
                         // Editing: the overlay below takes the touches.
@@ -211,7 +251,7 @@ fun TouchPad(
             if (button == null) continue
             val scale = layout.extraScales[extra] ?: 1f
             Box(Modifier.centeredAt(center)) {
-                Box(Modifier.graphicsLayer { scaleX = scale; scaleY = scale }) { button() }
+                Box(Modifier.graphicsLayer { scaleX = scale; scaleY = scale; alpha = idleFactor }) { button() }
             }
         }
         // While editing, the buttons are only to be moved, not pressed: this covers them and takes every touch.
@@ -253,6 +293,9 @@ fun TouchPad(
         }
     }
 }
+
+/** How much of its opacity the pad keeps while it is idle. */
+private const val IDLE_ALPHA = 0.3f
 
 /** The extra buttons are drawn at this size by the caller. */
 private val EXTRA_BUTTON_SIZE = 44.dp

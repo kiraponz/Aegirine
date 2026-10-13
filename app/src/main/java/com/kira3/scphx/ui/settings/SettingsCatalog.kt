@@ -438,6 +438,10 @@ object SettingsCatalog {
                     "controls.padOpacity", R.string.settings_pad_opacity,
                     range = 20..100, step = 5, unit = R.string.settings_unit_percent,
                 ),
+                Slider(
+                    "controls.padIdleSeconds", R.string.settings_pad_idle, R.string.settings_pad_idle_summary,
+                    range = 1..31, unit = R.string.settings_unit_seconds, labels = mapOf(31 to off),
+                ),
                 Toggle("controls.padHaptics", R.string.settings_pad_haptics),
                 PadLayoutSetting,
             ),

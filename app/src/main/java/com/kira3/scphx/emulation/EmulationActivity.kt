@@ -278,6 +278,7 @@ class EmulationActivity : ComponentActivity() {
                         haptics = settings?.controls?.padHaptics != false,
                         edits = padEdits,
                         editor = padEditor,
+                        idleSeconds = settings?.controls?.padIdleSeconds?.takeIf { it in 1..30 } ?: 0,
                         screenshotButton = if (editPadOnly || settings?.frameLimit?.screenshotButton == true) {
                             { ScreenshotButton(onClick = ::takeScreenshot) }
                         } else {
