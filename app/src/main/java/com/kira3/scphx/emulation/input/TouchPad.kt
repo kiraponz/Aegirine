@@ -18,6 +18,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.positionChange
+import com.kira3.scphx.data.ControlEdit
+import com.kira3.scphx.data.PadLayoutEdits
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -44,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.kira3.scphx.R
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -51,6 +56,37 @@ import kotlin.math.roundToInt
 interface PadSink {
     fun onButton(button: PadButton, pressed: Boolean)
     fun onStick(stick: PadStick, x: Float, y: Float)
+}
+
+/**
+ * The state of the layout editor: the edits being made and the control being dragged or sized.
+ * While one is given to [TouchPad], the pad does not play; touches move and select its controls.
+ */
+class PadEditor(initial: PadLayoutEdits) {
+    var edits by mutableStateOf(initial)
+        private set
+
+    /** The id of the selected control (see TouchPadLayout.kt), or null. */
+    var selected by mutableStateOf<String?>(null)
+        internal set
+
+    internal fun move(landscape: Boolean, id: String, dx: Float, dy: Float) = change(landscape, id) {
+        it.copy(x = it.x + dx, y = it.y + dy)
+    }
+
+    fun setScale(landscape: Boolean, id: String, scale: Float) = change(landscape, id) { it.copy(scale = scale) }
+
+    fun scaleOf(landscape: Boolean, id: String): Float = edits.of(landscape)[id]?.scale ?: 1f
+
+    /** Puts every control of this orientation back where the built-in layout has it. */
+    fun reset(landscape: Boolean) {
+        edits = edits.with(landscape, emptyMap())
+    }
+
+    private fun change(landscape: Boolean, id: String, transform: (ControlEdit) -> ControlEdit) {
+        val current = edits.of(landscape)
+        edits = edits.with(landscape, current + (id to transform(current[id] ?: ControlEdit())))
+    }
 }
 
 /**
@@ -66,7 +102,8 @@ interface PadSink {
  * [opacity] fades the whole pad; [haptics] turns off the vibration on a press.
  *
  * [fastForwardButton], if given, is placed where the layout leaves room for it, and stays
- * while the pad is hidden.
+ * while the pad is hidden. [edits] are the user's changes to the layout; with an [editor] they are
+ * the editor's, and the pad is drawn for editing instead of playing.
  */
 @Composable
 fun TouchPad(
@@ -83,6 +120,8 @@ fun TouchPad(
     gameAspect: Float? = null,
     opacity: Float = 1f,
     haptics: Boolean = true,
+    edits: PadLayoutEdits = PadLayoutEdits(),
+    editor: PadEditor? = null,
 ) {
     val view = LocalView.current
     val currentHaptics by rememberUpdatedState(haptics)
@@ -100,12 +139,16 @@ fun TouchPad(
             .windowInsetsPadding(WindowInsets.displayCutout),
     ) {
         val maxUnit = with(LocalDensity.current) { MAX_UNIT.toPx() }
-        val layout = remember(constraints.maxWidth, constraints.maxHeight, maxUnit, floatingSticks) {
-            touchPadLayout(
-                Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()),
-                maxUnit,
-            ).let { if (floatingSticks) it.withoutSticks() else it }
+        val area = Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
+        val landscape = area.width >= area.height
+        val activeEdits = (editor?.edits ?: edits).of(landscape)
+        val layout = remember(constraints.maxWidth, constraints.maxHeight, maxUnit, floatingSticks, activeEdits) {
+            touchPadLayout(area, maxUnit)
+                .let { if (floatingSticks) it.withoutSticks() else it }
+                .edited(activeEdits, area)
         }
+        val currentLayout by rememberUpdatedState(layout)
+        val extraRadius = with(LocalDensity.current) { EXTRA_BUTTON_SIZE.toPx() / 2 }
         val labels = buttonLabels()
         val textMeasurer = rememberTextMeasurer()
 
@@ -113,8 +156,10 @@ fun TouchPad(
             Modifier
                 .fillMaxSize()
                 .alpha(opacity)
-                .pointerInput(layout, visible, floatingSticks, gameAspect) {
-                    if (visible) {
+                .pointerInput(editor, layout.takeIf { editor == null }, visible, floatingSticks, gameAspect) {
+                    if (editor != null) {
+                        // Editing: the overlay below takes the touches.
+                    } else if (visible) {
                         tracker.layout = layout
                         tracker.floating = floatingSticks
                         tracker.areaWidth = size.width.toFloat()
@@ -140,25 +185,113 @@ fun TouchPad(
                     }
                 },
         ) {
-            if (visible) drawPad(layout, tracker, labels, textMeasurer)
+            if (visible || editor != null) drawPad(layout, tracker, labels, textMeasurer)
+            editor?.selected?.let { id -> selectionOf(layout, id, extraRadius)?.let { drawSelection(it) } }
         }
-        if (fastForwardButton != null) {
-            Box(Modifier.centeredAt(layout.fastForward)) { fastForwardButton() }
+        val extraButtons = mapOf(
+            PadExtra.FastForward to fastForwardButton,
+            PadExtra.Rewind to rewindButton,
+            PadExtra.Screenshot to screenshotButton,
+            PadExtra.Macro to macroButton,
+            PadExtra.Ai to aiButton,
+        )
+        for ((extra, button) in extraButtons) {
+            val center = layout.extras[extra] ?: continue
+            if (button == null) continue
+            val scale = layout.extraScales[extra] ?: 1f
+            Box(Modifier.centeredAt(center)) {
+                Box(Modifier.graphicsLayer { scaleX = scale; scaleY = scale }) { button() }
+            }
         }
-        if (rewindButton != null) {
-            Box(Modifier.centeredAt(layout.rewind)) { rewindButton() }
-        }
-        if (screenshotButton != null) {
-            Box(Modifier.centeredAt(layout.screenshot)) { screenshotButton() }
-        }
-        if (macroButton != null) {
-            Box(Modifier.centeredAt(layout.macro)) { macroButton() }
-        }
-        if (aiButton != null) {
-            Box(Modifier.centeredAt(layout.ai)) { aiButton() }
+        // While editing, the buttons are only to be moved, not pressed: this covers them and takes every touch.
+        if (editor != null) {
+            Box(
+                Modifier.fillMaxSize().pointerInput(editor) {
+                    awaitPointerEventScope {
+                        var dragging = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.first()
+                            when {
+                                change.changedToDown() -> {
+                                    editor.selected = editorHit(currentLayout, change.position, extraRadius)
+                                    dragging = editor.selected != null
+                                    change.consume()
+                                }
+                                !change.pressed -> dragging = false
+                                dragging -> {
+                                    val id = editor.selected
+                                    val center = id?.let { currentLayout.centerOf(it) }
+                                    if (id != null && center != null) {
+                                        // The center stays on the screen, so a control cannot be lost off its edge.
+                                        val target = center + change.positionChange()
+                                        val clamped = Offset(
+                                            target.x.coerceIn(0f, size.width.toFloat()),
+                                            target.y.coerceIn(0f, size.height.toFloat()),
+                                        )
+                                        val moved = clamped - center
+                                        editor.move(landscape, id, moved.x / size.width, moved.y / size.height)
+                                    }
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                },
+            )
         }
     }
 }
+
+/** The extra buttons are drawn at this size by the caller. */
+private val EXTRA_BUTTON_SIZE = 44.dp
+
+/** The id of the control under [position] for the editor: the one whose own size the point is closest to the middle of. */
+private fun editorHit(layout: TouchPadLayout, position: Offset, extraRadius: Float): String? {
+    var best: String? = null
+    var bestRatio = Float.MAX_VALUE
+    fun consider(id: String, center: Offset, radius: Float) {
+        val ratio = (position - center).getDistance() / radius
+        if (ratio <= 1.2f && ratio < bestRatio) {
+            best = id
+            bestRatio = ratio
+        }
+    }
+    for (control in layout.controls) when (control) {
+        is TouchControl.Button -> consider(control.id, control.bounds.center, max(control.bounds.width, control.bounds.height) / 2)
+        is TouchControl.DPad -> consider(control.id, control.center, control.radius)
+        is TouchControl.Stick -> consider(control.id, control.center, control.radius)
+    }
+    for ((extra, center) in layout.extras) consider(extra.id, center, extraRadius * (layout.extraScales[extra] ?: 1f))
+    return best
+}
+
+/** The area to outline around the control with this [id]. */
+private fun selectionOf(layout: TouchPadLayout, id: String, extraRadius: Float): Rect? {
+    layout.controls.firstOrNull { it.id == id }?.let { control ->
+        return when (control) {
+            is TouchControl.Button -> control.bounds
+            is TouchControl.DPad -> Rect(control.center, control.radius)
+            is TouchControl.Stick -> Rect(control.center, control.radius)
+        }
+    }
+    val extra = PadExtra.entries.firstOrNull { it.id == id } ?: return null
+    val center = layout.extras[extra] ?: return null
+    return Rect(center, extraRadius * (layout.extraScales[extra] ?: 1f))
+}
+
+private fun DrawScope.drawSelection(bounds: Rect) {
+    val pad = 6.dp.toPx()
+    drawRoundRect(
+        SelectionColor,
+        bounds.topLeft - Offset(pad, pad),
+        Size(bounds.width + pad * 2, bounds.height + pad * 2),
+        CornerRadius(pad * 2),
+        style = Stroke(width = 2.5.dp.toPx()),
+    )
+}
+
+private val SelectionColor = Color(0xFFFFD54F)
 
 /** Places the content with its center at [center]. */
 private fun Modifier.centeredAt(center: Offset): Modifier = layout { measurable, constraints ->
@@ -400,7 +533,7 @@ private fun DrawScope.drawPad(
             }
             val label = labels[control.button]
             if (label != null) {
-                val text = textMeasurer.measure(label, labelStyle)
+                val text = textMeasurer.measure(label, labelStyle.copy(fontSize = labelStyle.fontSize * control.scale))
                 drawText(
                     text,
                     topLeft = b.center - Offset(text.size.width / 2f, text.size.height / 2f),

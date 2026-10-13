@@ -86,6 +86,7 @@ interface SettingsActions {
     fun openGpuDriver()
     fun openBios()
     fun openMemoryCards()
+    fun openPadLayout()
 }
 
 /** One setting as a segmented list item. [shapes] places it within its section's group. */
@@ -122,6 +123,7 @@ fun SettingRow(
         BiosManageSetting -> BiosManageRow(row, actions)
         ControllersSetting -> ControllersRow(row)
         is KeyAssignSetting -> KeyAssignRow(row, setting, actions)
+        PadLayoutSetting -> PadLayoutRow(row, actions)
         is ResetSetting -> ResetRow(row, setting, state, isGame, actions)
         MemoryCardsManageSetting -> MemoryCardsManageRow(row, actions)
         is MemoryCardSlotSetting -> DialogChoiceRow(row, cardChoice(setting, state, values), actions)
@@ -267,6 +269,18 @@ private fun KeyAssignRow(row: RowParams, setting: KeyAssignSetting, actions: Set
             },
         )
     }
+}
+
+@Composable
+private fun PadLayoutRow(row: RowParams, actions: SettingsActions) {
+    SegmentedListItem(
+        onClick = actions::openPadLayout,
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+        supportingContent = { Supporting(PadLayoutSetting) },
+    ) { Text(stringResource(PadLayoutSetting.title)) }
 }
 
 @Composable

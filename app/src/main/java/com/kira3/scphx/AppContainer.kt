@@ -5,6 +5,7 @@ import com.kira3.scphx.data.AppPreferences
 import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.CheatRepository
 import com.kira3.scphx.data.MacroRepository
+import com.kira3.scphx.data.PadLayoutRepository
 import com.kira3.scphx.data.DriverRepository
 import com.kira3.scphx.data.GameRecordRepository
 import com.kira3.scphx.data.GeminiKeyStore
@@ -33,6 +34,7 @@ class AppContainer(context: Context) {
     val memoryCardRepository: MemoryCardRepository by lazy { MemoryCardRepository(appContext, emulatorCore) }
     val cheatRepository: CheatRepository by lazy { CheatRepository(appContext) }
     val macroRepository: MacroRepository by lazy { MacroRepository(appContext) }
+    val padLayoutRepository: PadLayoutRepository by lazy { PadLayoutRepository(appContext) }
     val memoRepository: MemoRepository by lazy { MemoRepository(appContext) }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
     val geminiKeyStore: GeminiKeyStore by lazy { GeminiKeyStore(appContext) }

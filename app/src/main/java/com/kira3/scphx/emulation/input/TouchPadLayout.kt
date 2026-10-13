@@ -3,35 +3,86 @@ package com.kira3.scphx.emulation.input
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import com.kira3.scphx.data.ControlEdit
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
 import kotlin.math.min
 
 /** One control on the touch pad, in pixels of the pad's area. */
 internal sealed interface TouchControl {
-    /** A button, round when [round] and pill-shaped otherwise. */
-    data class Button(val button: PadButton, val bounds: Rect, val round: Boolean) : TouchControl
+    /** A button, round when [round] and pill-shaped otherwise. [scale] is how much a layout edit enlarged it. */
+    data class Button(val button: PadButton, val bounds: Rect, val round: Boolean, val scale: Float = 1f) : TouchControl
 
     data class DPad(val center: Offset, val radius: Float) : TouchControl
 
     data class Stick(val stick: PadStick, val center: Offset, val radius: Float) : TouchControl
 }
 
+/** The buttons the pad does not draw itself: the caller supplies them and the layout says where they go. */
+internal enum class PadExtra(val id: String) {
+    FastForward("extra.fastForward"),
+    Rewind("extra.rewind"),
+    Screenshot("extra.screenshot"),
+    Macro("extra.macro"),
+    Ai("extra.ai"),
+}
+
+/** The key of a control in a layout's edits. */
+internal val TouchControl.id: String
+    get() = when (this) {
+        is TouchControl.Button -> "btn.${button.name}"
+        is TouchControl.DPad -> "dpad"
+        is TouchControl.Stick -> "stick.${stick.name}"
+    }
+
 /**
- * [fastForward], [rewind], [screenshot], [macro] and [ai] are the centers of the buttons the pad does not draw itself. Rewind
- * is kept well away from the shoulder buttons, so it is not pressed by a slip.
+ * [extras] are the centers of the buttons the pad does not draw itself, [extraScales] how much they are
+ * enlarged. Rewind is kept well away from the shoulder buttons, so it is not pressed by a slip.
  */
 internal class TouchPadLayout(
     val unit: Float,
     val controls: List<TouchControl>,
-    val fastForward: Offset,
-    val rewind: Offset,
-    val screenshot: Offset,
-    val macro: Offset,
-    val ai: Offset,
+    val extras: Map<PadExtra, Offset>,
+    val extraScales: Map<PadExtra, Float> = emptyMap(),
 ) {
     /** The same pad without the drawn sticks, for sticks that appear under a finger. */
-    fun withoutSticks() = TouchPadLayout(unit, controls.filter { it !is TouchControl.Stick }, fastForward, rewind, screenshot, macro, ai)
+    fun withoutSticks() = TouchPadLayout(unit, controls.filter { it !is TouchControl.Stick }, extras, extraScales)
+
+    /** The center of the control with this [id] (a [TouchControl.id] or a [PadExtra.id]), if the layout has it. */
+    fun centerOf(id: String): Offset? =
+        controls.firstOrNull { it.id == id }?.let {
+            when (it) {
+                is TouchControl.Button -> it.bounds.center
+                is TouchControl.DPad -> it.center
+                is TouchControl.Stick -> it.center
+            }
+        } ?: PadExtra.entries.firstOrNull { it.id == id }?.let { extras[it] }
+
+    /** This layout with the user's [edits] applied; [size] is the area it was laid out for. */
+    fun edited(edits: Map<String, ControlEdit>, size: Size): TouchPadLayout {
+        if (edits.isEmpty()) return this
+        fun shift(edit: ControlEdit) = Offset(edit.x * size.width, edit.y * size.height)
+        return TouchPadLayout(
+            unit,
+            controls.map { control ->
+                val edit = edits[control.id] ?: return@map control
+                val s = edit.scale
+                when (control) {
+                    is TouchControl.Button -> {
+                        val bounds = Rect(
+                            control.bounds.center + shift(edit) - Offset(control.bounds.width * s / 2, control.bounds.height * s / 2),
+                            Size(control.bounds.width * s, control.bounds.height * s),
+                        )
+                        control.copy(bounds = bounds, scale = s)
+                    }
+                    is TouchControl.DPad -> control.copy(center = control.center + shift(edit), radius = control.radius * s)
+                    is TouchControl.Stick -> control.copy(center = control.center + shift(edit), radius = control.radius * s)
+                }
+            },
+            extras.mapValues { (extra, center) -> edits[extra.id]?.let { center + shift(it) } ?: center },
+            PadExtra.entries.mapNotNull { extra -> edits[extra.id]?.let { extra to it.scale } }.toMap(),
+        )
+    }
 }
 
 /**
@@ -72,11 +123,13 @@ private fun landscapeLayout(size: Size, maxUnit: Float): TouchPadLayout {
             addAll(selectStart(Offset(w / 2, h - m - 0.35f * u), u))
         },
         // Along the top between L1 and R1: below the shoulder buttons they sat on the D-pad and the face buttons.
-        fastForward = Offset(w / 2, m + shoulder.height / 2),
-        rewind = Offset(w / 2 - 2 * extraGap, m + shoulder.height / 2),
-        macro = Offset(w / 2 - extraGap, m + shoulder.height / 2),
-        screenshot = Offset(w / 2 + extraGap, m + shoulder.height / 2),
-        ai = Offset(w / 2 + 2 * extraGap, m + shoulder.height / 2),
+        mapOf(
+            PadExtra.FastForward to Offset(w / 2, m + shoulder.height / 2),
+            PadExtra.Rewind to Offset(w / 2 - 2 * extraGap, m + shoulder.height / 2),
+            PadExtra.Macro to Offset(w / 2 - extraGap, m + shoulder.height / 2),
+            PadExtra.Screenshot to Offset(w / 2 + extraGap, m + shoulder.height / 2),
+            PadExtra.Ai to Offset(w / 2 + 2 * extraGap, m + shoulder.height / 2),
+        ),
     )
 }
 
@@ -107,16 +160,18 @@ private fun portraitLayout(size: Size, maxUnit: Float): TouchPadLayout {
             add(round(PadButton.L3, Offset(m + 0.5f * u, stickY + 0.75f * u), 0.42f * u))
             add(round(PadButton.R3, Offset(w - m - 0.5f * u, stickY + 0.75f * u), 0.42f * u))
         },
-        // Under Select/Start, between the D-pad and the face buttons.
-        fastForward = Offset(w / 2, top + 1.6f * u),
-        // Above L2, in the empty space under the picture.
-        rewind = Offset(m + shoulder.width / 2, top - 1.6f * u),
-        // Above R2, mirroring rewind.
-        screenshot = Offset(w - m - shoulder.width / 2, top - 1.6f * u),
-        // Beside rewind.
-        macro = Offset(m + shoulder.width / 2 + 1.4f * u, top - 1.6f * u),
-        // Beside screenshot.
-        ai = Offset(w - m - shoulder.width / 2 - 1.4f * u, top - 1.6f * u),
+        mapOf(
+            // Under Select/Start, between the D-pad and the face buttons.
+            PadExtra.FastForward to Offset(w / 2, top + 1.6f * u),
+            // Above L2, in the empty space under the picture.
+            PadExtra.Rewind to Offset(m + shoulder.width / 2, top - 1.6f * u),
+            // Above R2, mirroring rewind.
+            PadExtra.Screenshot to Offset(w - m - shoulder.width / 2, top - 1.6f * u),
+            // Beside rewind.
+            PadExtra.Macro to Offset(m + shoulder.width / 2 + 1.4f * u, top - 1.6f * u),
+            // Beside screenshot.
+            PadExtra.Ai to Offset(w - m - shoulder.width / 2 - 1.4f * u, top - 1.6f * u),
+        ),
     )
 }
 

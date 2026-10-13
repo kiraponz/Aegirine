@@ -58,7 +58,9 @@ import com.kira3.scphx.emulation.macro.MacroPlayer
 import com.kira3.scphx.emulation.macro.MacroRecorder
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.data.memo.Memo
+import com.kira3.scphx.emulation.input.PadEditor
 import com.kira3.scphx.emulation.input.TouchPad
+import com.kira3.scphx.data.PadLayoutEdits
 import com.kira3.scphx.emulation.input.gameAspectOf
 import com.kira3.scphx.emucore.settings.EmulatorSettings
 import com.kira3.scphx.emucore.settings.SettingsJson
@@ -69,6 +71,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -112,6 +115,13 @@ class EmulationActivity : ComponentActivity() {
 
     /** The touch pad hides while a controller is in use and comes back on a touch. */
     private var touchPadVisible by mutableStateOf(true)
+
+    /** The user's changes to the touch pad layout, and the editor while they are being made. */
+    private var padEdits by mutableStateOf(PadLayoutEdits())
+    private var padEditor by mutableStateOf<PadEditor?>(null)
+
+    /** Started from the settings to edit the pad layout: no game runs, and leaving the editor finishes the activity. */
+    private var editPadOnly = false
 
     /** What the game runs with, once read. The fast-forward button and the menu show from it. */
     private var settings by mutableStateOf<EmulatorSettings?>(null)
@@ -174,7 +184,7 @@ class EmulationActivity : ComponentActivity() {
     private var aiBusy = false
     private var aiJob: Job? = null
 
-    private val overlayOpen get() = menuOpen || rewindOpen || cheatsOpen || macrosOpen || aiShot != null
+    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || aiShot != null
 
     /** Waits for the game's CRC, then gives the core its cheats. */
     private var cheatsJob: Job? = null
@@ -203,6 +213,7 @@ class EmulationActivity : ComponentActivity() {
         enterImmersiveMode()
 
         serial = intent.getStringExtra(EXTRA_SERIAL)
+        editPadOnly = intent.getBooleanExtra(EXTRA_EDIT_PAD_ONLY, false)
         // The BIOS menu (empty URI) isn't a game.
         if (gameUri != Uri.EMPTY) recordKey = GameRecordRepository.keyOf(serial, gameUri.toString())
         systemDriverForced = intent.getBooleanExtra(EXTRA_SYSTEM_DRIVER, false)
@@ -211,6 +222,7 @@ class EmulationActivity : ComponentActivity() {
         }
         onBackPressedDispatcher.addCallback(this) {
             when {
+                padEditor != null -> closePadEditor(null)
                 menuOpen -> if (!stateBusy) closeMenu()
                 rewindOpen -> if (!stateBusy) closeRewind()
                 cheatsOpen -> closeCheats()
@@ -247,7 +259,7 @@ class EmulationActivity : ComponentActivity() {
                         sink = touchSink,
                         visible = touchPadVisible,
                         onShowRequest = { touchPadVisible = true },
-                        fastForwardButton = if (settings?.frameLimit?.fastForwardButton == true) {
+                        fastForwardButton = if (editPadOnly || settings?.frameLimit?.fastForwardButton == true) {
                             {
                                 val fastForward by core.fastForward.collectAsState()
                                 FastForwardButton(active = fastForward, onActiveChange = core::setFastForward)
@@ -255,7 +267,7 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
-                        rewindButton = if (settings?.rewind?.enabled == true && serial != null) {
+                        rewindButton = if (editPadOnly || (settings?.rewind?.enabled == true && serial != null)) {
                             { RewindButton(onClick = ::openRewind) }
                         } else {
                             null
@@ -264,12 +276,14 @@ class EmulationActivity : ComponentActivity() {
                         gameAspect = settings?.output?.let { gameAspectOf(it.aspectRatio, it.customAspectRatio) },
                         opacity = (settings?.controls?.padOpacity ?: 100) / 100f,
                         haptics = settings?.controls?.padHaptics != false,
-                        screenshotButton = if (settings?.frameLimit?.screenshotButton == true) {
+                        edits = padEdits,
+                        editor = padEditor,
+                        screenshotButton = if (editPadOnly || settings?.frameLimit?.screenshotButton == true) {
                             { ScreenshotButton(onClick = ::takeScreenshot) }
                         } else {
                             null
                         },
-                        macroButton = if (settings?.frameLimit?.macroButton == true && serial != null && recordingSeconds < 0) {
+                        macroButton = if (editPadOnly || (settings?.frameLimit?.macroButton == true && serial != null && recordingSeconds < 0)) {
                             {
                                 val playing by macroPlayer.playing.collectAsState()
                                 MacroButton(macroList, playing != null, macroActions)
@@ -277,7 +291,7 @@ class EmulationActivity : ComponentActivity() {
                         } else {
                             null
                         },
-                        aiButton = if (settings?.gemini?.enabled == true) {
+                        aiButton = if (editPadOnly || settings?.gemini?.enabled == true) {
                             { AiButton(onClick = ::openAi) }
                         } else {
                             null
@@ -310,6 +324,7 @@ class EmulationActivity : ComponentActivity() {
                     if (macrosOpen) {
                         MacrosMenu(macroList, macroActions, ::closeMacros)
                     }
+                    padEditor?.let { PadEditorBar(it, serial != null, ::closePadEditor) { closePadEditor(null) } }
                     AiPanelHost(aiShot, aiState, ::askGemini, if (serial != null) ::saveMemo else null, ::closeAi)
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
@@ -318,11 +333,21 @@ class EmulationActivity : ComponentActivity() {
             }
         }
 
+        lifecycleScope.launch {
+            padEdits = container.padLayoutRepository.load(serial)
+            if (editPadOnly) {
+                val repository = container.settingsRepository
+                val overrides = serial?.let { repository.loadOverrides(it) } ?: SettingsOverrides()
+                settings = SettingsJson.merge(repository.loadGlobal(), overrides)
+                touchPadVisible = true
+                padEditor = PadEditor(padEdits)
+            }
+        }
         serial?.let { serial ->
             lifecycleScope.launch { container.macroRepository.macros(serial).collect { macroList = it } }
             lifecycleScope.launch { container.memoRepository.memos(serial).collect { memoList = it } }
         }
-        lifecycleScope.launch { boot(gameUri) }
+        if (!editPadOnly) lifecycleScope.launch { boot(gameUri) }
     }
 
     private suspend fun boot(gameUri: Uri) {
@@ -876,6 +901,36 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    /** Closes the layout editor, storing the edits for [save]'s games if given; the game goes on. */
+    private fun closePadEditor(save: PadLayoutScope?) {
+        val editor = padEditor ?: return
+        padEditor = null
+        if (save != null) {
+            padEdits = editor.edits
+            val repository = container.padLayoutRepository
+            lifecycleScope.launch {
+                withContext(NonCancellable) {
+                    when {
+                        save == PadLayoutScope.Game && serial != null -> repository.save(serial, editor.edits)
+                        else -> {
+                            // The layout every game shares; this game follows it, whatever it had of its own.
+                            repository.save(null, editor.edits)
+                            serial?.let { repository.clearGame(it) }
+                        }
+                    }
+                }
+                // Finishing ends the process (onDestroy), so only after the layout is written.
+                if (editPadOnly) finish()
+            }
+        } else if (editPadOnly) {
+            finish()
+        }
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
     private fun closeMenu() {
         menuOpen = false
         if (pausedByMenu) {
@@ -917,6 +972,18 @@ class EmulationActivity : ComponentActivity() {
             // The core captures the next frame it presents, which a paused game never does.
             closeMenu()
             takeScreenshot()
+        }
+
+        override fun editPadLayout() {
+            // The game stays paused (by the menu) while the layout is edited.
+            menuOpen = false
+            touchPadVisible = true
+            padEditor = PadEditor(padEdits)
+        }
+
+        override fun hideTouchPad() {
+            touchPadVisible = false
+            closeMenu()
         }
 
         override fun macros() {
@@ -1229,6 +1296,7 @@ class EmulationActivity : ComponentActivity() {
         private const val AUTO_PROGRESSIVE_VM_WAIT_MS = 15_000L
         private const val EXTRA_GAME_URI = "com.kira3.scphx.extra.GAME_URI"
         private const val EXTRA_SERIAL = "com.kira3.scphx.extra.SERIAL"
+        private const val EXTRA_EDIT_PAD_ONLY = "com.kira3.scphx.extra.EDIT_PAD_ONLY"
         private const val EXTRA_SYSTEM_DRIVER = "com.kira3.scphx.extra.SYSTEM_DRIVER"
         private const val EXTRA_FAILED_DRIVER = "com.kira3.scphx.extra.FAILED_DRIVER"
         private const val VM_STOP_WAIT_MS = 5_000L
@@ -1249,6 +1317,13 @@ class EmulationActivity : ComponentActivity() {
         fun shortcutIntent(context: Context, gameUri: Uri, serial: String?): Intent =
             Intent(Intent.ACTION_VIEW, gameUri, context, EmulationActivity::class.java)
                 .putExtra(EXTRA_SERIAL, serial)
+
+        /** Opens only the pad layout editor, with no game: for [serial]'s game, or for every game when null. */
+        fun padLayoutIntent(context: Context, serial: String?): Intent =
+            Intent(context, EmulationActivity::class.java)
+                .putExtra(EXTRA_GAME_URI, Uri.EMPTY)
+                .putExtra(EXTRA_SERIAL, serial)
+                .putExtra(EXTRA_EDIT_PAD_ONLY, true)
 
         fun intent(context: Context, gameUri: Uri, serial: String?): Intent =
             Intent(context, EmulationActivity::class.java)

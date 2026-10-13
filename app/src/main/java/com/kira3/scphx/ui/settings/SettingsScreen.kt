@@ -1,5 +1,7 @@
 package com.kira3.scphx.ui.settings
 
+import androidx.compose.ui.platform.LocalContext
+import com.kira3.scphx.emulation.EmulationActivity
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -240,6 +242,7 @@ fun SettingsCategoryScreen(
     val twoPane = LocalListDetailSceneScope.current != null
     val overridden = state?.overrides.orEmpty().filter { it in category.paths }
 
+    val context = LocalContext.current
     val actions = remember(viewModel, onOpenGpuDriver, onOpenBios, onOpenMemoryCards) {
         object : SettingsActions {
             override fun set(path: String, value: Any) = viewModel.set(path, value)
@@ -248,6 +251,7 @@ fun SettingsCategoryScreen(
             override fun openGpuDriver() = onOpenGpuDriver()
             override fun openBios() = onOpenBios()
             override fun openMemoryCards() = onOpenMemoryCards()
+            override fun openPadLayout() = context.startActivity(EmulationActivity.padLayoutIntent(context, viewModel.serial))
         }
     }
 

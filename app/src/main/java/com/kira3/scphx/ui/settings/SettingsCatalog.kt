@@ -439,6 +439,7 @@ object SettingsCatalog {
                     range = 20..100, step = 5, unit = R.string.settings_unit_percent,
                 ),
                 Toggle("controls.padHaptics", R.string.settings_pad_haptics),
+                PadLayoutSetting,
             ),
         ),
         SettingsSection(

@@ -171,6 +171,11 @@ class KeyAssignSetting(
     val default: Int,
 ) : Setting(path, title, 0, null, null)
 
+/** The touch pad's layout, edited on the play screen's own editor (for a game's settings: that game's layout). */
+data object PadLayoutSetting : Setting(
+    null, R.string.settings_pad_layout, R.string.settings_pad_layout_summary, null, null,
+)
+
 /** Puts the settings at [defaults] (path to default value) back to those values (in a game: back to the global ones). */
 class ResetSetting(
     @StringRes title: Int,

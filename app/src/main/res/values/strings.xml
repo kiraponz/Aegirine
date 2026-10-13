@@ -86,6 +86,23 @@
     <string name="menu_cancel">Cancel</string>
 
     <!-- Touch pad button labels: the names printed on a DualShock 2 -->
+    <string name="pad_edit_title">Edit pad layout</string>
+    <string name="pad_edit_hint">Drag a control to move it. Tap one to change its size.</string>
+    <string name="pad_edit_size">Size</string>
+    <string name="pad_edit_reset">Reset layout</string>
+    <string name="pad_edit_save">Save</string>
+    <string name="pad_edit_save_for">Save for</string>
+    <string name="pad_edit_save_game">This game</string>
+    <string name="pad_edit_save_all">All games</string>
+    <string name="pad_edit_dpad">D-pad</string>
+    <string name="pad_edit_stick_left">Left stick</string>
+    <string name="pad_edit_stick_right">Right stick</string>
+    <string name="pad_edit_triangle">Triangle</string>
+    <string name="pad_edit_circle">Circle</string>
+    <string name="pad_edit_cross">Cross</string>
+    <string name="pad_edit_square">Square</string>
+    <string name="menu_edit_pad">Edit pad layout</string>
+    <string name="menu_hide_pad">Hide touch pad</string>
     <string name="pad_l1">L1</string>
     <string name="pad_l2">L2</string>
     <string name="pad_r1">R1</string>
@@ -171,6 +188,8 @@
     <string name="settings_opt_stick_floating">Floating</string>
     <string name="settings_pad_opacity">Pad opacity</string>
     <string name="settings_pad_haptics">Vibrate on press</string>
+    <string name="settings_pad_layout">Pad layout</string>
+    <string name="settings_pad_layout_summary">Move and resize the buttons of the touch pad</string>
     <string name="settings_controllers">Connected controllers</string>
     <string name="settings_stick_deadzone">Stick dead zone</string>
     <string name="settings_trigger_threshold">Trigger threshold</string>

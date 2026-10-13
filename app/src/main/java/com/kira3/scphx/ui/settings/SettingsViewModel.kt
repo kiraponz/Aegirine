@@ -49,7 +49,7 @@ enum class DriverMessage { Installed, NotADriver }
 
 /** The global settings when [serial] is null, else that game's settings. */
 class SettingsViewModel(
-    private val serial: String?,
+    val serial: String?,
     private val settingsRepository: SettingsRepository,
     biosRepository: BiosRepository,
     memoryCardRepository: MemoryCardRepository,

@@ -1,5 +1,6 @@
 package com.kira3.scphx.ui.settings
 
+import com.kira3.scphx.emulation.EmulationActivity
 import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,6 +98,7 @@ fun SettingsSearchScreen(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
+    val context = LocalContext.current
     val actions = remember(viewModel, onOpenGpuDriver, onOpenBios, onOpenMemoryCards) {
         object : SettingsActions {
             override fun set(path: String, value: Any) = viewModel.set(path, value)
@@ -105,6 +107,7 @@ fun SettingsSearchScreen(
             override fun openGpuDriver() = onOpenGpuDriver()
             override fun openBios() = onOpenBios()
             override fun openMemoryCards() = onOpenMemoryCards()
+            override fun openPadLayout() = context.startActivity(EmulationActivity.padLayoutIntent(context, viewModel.serial))
         }
     }
 

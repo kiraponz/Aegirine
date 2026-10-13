@@ -73,6 +73,8 @@ interface InGameMenuActions {
     fun rewind()
     fun cheats()
     fun macros()
+    fun editPadLayout()
+    fun hideTouchPad()
     fun setMacroButton(show: Boolean)
     fun setShowMemos(show: Boolean)
     fun setShowFps(show: Boolean)
@@ -158,6 +160,8 @@ fun InGameMenu(
                     MenuAction(stringResource(R.string.macro_title), !busy, actions::macros)
                 }
                 MenuAction(stringResource(R.string.menu_screenshot), !busy, actions::screenshot)
+                MenuAction(stringResource(R.string.menu_edit_pad), !busy, actions::editPadLayout)
+                MenuAction(stringResource(R.string.menu_hide_pad), !busy, actions::hideTouchPad)
                 MenuAction(stringResource(R.string.menu_reset), !busy) { confirm = Confirm.Reset }
                 if (hasGame) {
                     MenuAction(stringResource(R.string.menu_exit_suspend), !busy, actions::exitAndResumeLater)
