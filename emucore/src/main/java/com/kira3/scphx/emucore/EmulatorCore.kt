@@ -460,6 +460,12 @@ class EmulatorCore(context: Context) {
     /** Frames the game has run (the core's own count). A load state sets it back. */
     val frameCount: Long get() = NativeApp.getFrameCount()
 
+    /** [length] bytes of main RAM from [address] (the EE address space, first [MAIN_RAM_BYTES]), or null with no game or out of range. */
+    fun readMemory(address: Int, length: Int): ByteArray? {
+        val bytes = ByteArray(length)
+        return bytes.takeIf { NativeApp.readEeMemory(address, it) }
+    }
+
     /** "00000000" until the game's ELF is running. */
     val gameCrc: String get() = runCatching { NativeApp.getGameCRC() }.getOrDefault("00000000")
 
@@ -527,6 +533,9 @@ class EmulatorCore(context: Context) {
         (value.coerceIn(0f, 1f) * PAD_RANGE_MAX).toInt()
 
     companion object {
+        /** Size of the main RAM that [readMemory] reaches. */
+        const val MAIN_RAM_BYTES = 32 * 1024 * 1024
+
         /** The save-state slots, as the core numbers them. */
         val SAVE_STATE_SLOTS: IntRange = 1..10
 

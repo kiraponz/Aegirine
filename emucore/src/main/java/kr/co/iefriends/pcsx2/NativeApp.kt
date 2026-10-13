@@ -156,6 +156,7 @@ internal object NativeApp {
     @JvmStatic external fun getCompatibilityForSerial(serial: String): Int
     @JvmStatic external fun getFPS(): Float
     @JvmStatic external fun getFrameCount(): Long
+    @JvmStatic external fun readEeMemory(address: Int, out: ByteArray): Boolean
 
     // ---- Save states ----
 

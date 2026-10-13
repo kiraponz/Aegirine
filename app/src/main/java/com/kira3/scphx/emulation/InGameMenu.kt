@@ -72,6 +72,7 @@ interface InGameMenuActions {
     fun exitAndResumeLater()
     fun rewind()
     fun cheats()
+    fun memorySearch()
     fun macros()
     fun editPadLayout()
     fun hideTouchPad()
@@ -158,6 +159,7 @@ fun InGameMenu(
                 }
                 if (hasGame) {
                     MenuAction(stringResource(R.string.macro_title), !busy, actions::macros)
+                    MenuAction(stringResource(R.string.search_title), !busy, actions::memorySearch)
                 }
                 MenuAction(stringResource(R.string.menu_screenshot), !busy, actions::screenshot)
                 MenuAction(stringResource(R.string.menu_edit_pad), !busy, actions::editPadLayout)

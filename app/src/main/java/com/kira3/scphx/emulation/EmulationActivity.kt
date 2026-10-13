@@ -56,6 +56,7 @@ import com.kira3.scphx.data.GeminiApi
 import com.kira3.scphx.data.GeminiError
 import com.kira3.scphx.emulation.macro.MacroPlayer
 import com.kira3.scphx.emulation.macro.MacroRecorder
+import com.kira3.scphx.emulation.search.MemorySearch
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.data.memo.Memo
 import com.kira3.scphx.emulation.input.PadEditor
@@ -173,6 +174,8 @@ class EmulationActivity : ComponentActivity() {
     private var macroList by mutableStateOf<List<Macro>>(emptyList())
     private var memoList by mutableStateOf<List<Memo>>(emptyList())
     private var macrosOpen by mutableStateOf(false)
+    private var searchOpen by mutableStateOf(false)
+    private val memorySearch by lazy { MemorySearch(core) }
 
     /** Seconds the running recording has gone on, or -1 when none is. */
     private var recordingSeconds by mutableLongStateOf(-1L)
@@ -184,7 +187,7 @@ class EmulationActivity : ComponentActivity() {
     private var aiBusy = false
     private var aiJob: Job? = null
 
-    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || aiShot != null
+    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || searchOpen || aiShot != null
 
     /** Waits for the game's CRC, then gives the core its cheats. */
     private var cheatsJob: Job? = null
@@ -227,6 +230,7 @@ class EmulationActivity : ComponentActivity() {
                 rewindOpen -> if (!stateBusy) closeRewind()
                 cheatsOpen -> closeCheats()
                 macrosOpen -> closeMacros()
+                searchOpen -> closeSearch()
                 aiShot != null -> closeAi()
                 recordingSeconds >= 0 -> stopRecording()
                 core.hasActiveVm -> openMenu()
@@ -321,6 +325,9 @@ class EmulationActivity : ComponentActivity() {
                     }
                     if (cheatsOpen) {
                         CheatsMenu(cheatList, ::toggleCheat, ::closeCheats)
+                    }
+                    if (searchOpen) {
+                        MemorySearchMenu(memorySearch, ::closeSearch)
                     }
                     if (macrosOpen) {
                         MacrosMenu(macroList, macroActions, ::closeMacros)
@@ -805,6 +812,14 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    private fun closeSearch() {
+        searchOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
     private fun showMacros() {
         macrosOpen = true
     }
@@ -1022,6 +1037,12 @@ class EmulationActivity : ComponentActivity() {
             // The game stays paused (by the menu) while the rewind menu is up.
             menuOpen = false
             showRewind()
+        }
+
+        override fun memorySearch() {
+            // The game stays paused (by the menu) while the search is up.
+            menuOpen = false
+            searchOpen = true
         }
 
         override fun cheats() {
