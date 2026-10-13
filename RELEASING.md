@@ -7,8 +7,10 @@ APKs go to GitHub Releases only.
 Every release must be signed with the same key, or users cannot update. Losing the key means
 the app can only be reinstalled under a new application ID.
 
+`keytool` comes with Android Studio's JDK (macOS has no Java of its own):
+
 ```bash
-keytool -genkeypair -v -keystore ametrine-release.jks -alias ametrine -keyalg RSA -keysize 4096 -validity 36500
+"/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool" -genkeypair -v -keystore ametrine-release.jks -alias ametrine -keyalg RSA -keysize 4096 -validity 36500
 ```
 
 Keep the `.jks` outside the repository, with a backup somewhere else. Then create
