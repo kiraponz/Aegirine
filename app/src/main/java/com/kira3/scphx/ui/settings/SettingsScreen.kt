@@ -82,6 +82,10 @@ fun SettingsHomeScreen(
     onOpenSearch: () -> Unit,
     cheatsSelected: Boolean,
     onOpenCheats: () -> Unit,
+    backupSelected: Boolean,
+    onOpenBackup: () -> Unit,
+    statesSelected: Boolean,
+    onOpenStates: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(serial)),
 ) {
@@ -154,6 +158,33 @@ fun SettingsHomeScreen(
                     supportingContent = { Text(stringResource(R.string.settings_cheats_summary)) },
                 ) { Text(stringResource(R.string.settings_cheats)) }
             }
+            // The app's own data, not a game's.
+            if (!isGame) {
+                item(key = "states") {
+                    SegmentedListItem(
+                        selected = statesSelected,
+                        onClick = onOpenStates,
+                        shapes = ListItemDefaults.segmentedShapes(0, 2),
+                        colors = settingsListColors(highlightSelected = true),
+                        modifier = Modifier.animateItem().padding(top = 12.dp),
+                        leadingContent = { ShapedIcon(MaterialShapes.Cookie4Sided.toShape(), R.drawable.ic_rewind, categories.size + 1) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                        supportingContent = { Text(stringResource(R.string.settings_states_summary)) },
+                    ) { Text(stringResource(R.string.settings_states)) }
+                }
+                item(key = "backup") {
+                    SegmentedListItem(
+                        selected = backupSelected,
+                        onClick = onOpenBackup,
+                        shapes = ListItemDefaults.segmentedShapes(1, 2),
+                        colors = settingsListColors(highlightSelected = true),
+                        modifier = Modifier.animateItem(),
+                        leadingContent = { ShapedIcon(MaterialShapes.Burst.toShape(), R.drawable.ic_settings_backup_restore, categories.size + 2) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                        supportingContent = { Text(stringResource(R.string.settings_backup_summary)) },
+                    ) { Text(stringResource(R.string.settings_backup)) }
+                }
+            }
         }
     }
 
@@ -187,7 +218,7 @@ private fun CategoryIcon(category: SettingsCategory, index: Int) {
 
 /** [icon] on [shape], colored by the row's [index] so neighbors differ. */
 @Composable
-private fun ShapedIcon(shape: Shape, icon: Int, index: Int) {
+internal fun ShapedIcon(shape: Shape, icon: Int, index: Int) {
     val colors = MaterialTheme.colorScheme
     val (container, content) = when (index % 3) {
         0 -> colors.primaryContainer to colors.onPrimaryContainer

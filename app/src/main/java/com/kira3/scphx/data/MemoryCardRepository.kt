@@ -1,6 +1,5 @@
 package com.kira3.scphx.data
 
-import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
@@ -323,10 +322,10 @@ class MemoryCardRepository(
     }
 
     /** Whether a game is running in the emulation process, which holds the cards open. */
-    private fun gameRunning(): Boolean {
-        val manager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return manager.runningAppProcesses.orEmpty().any { it.processName == "${appContext.packageName}:emu" }
-    }
+    private fun gameRunning(): Boolean = isGameProcessRunning(appContext)
+
+    /** Lists the cards again, after something else changed the folder. */
+    fun refresh() = changed()
 
     private fun changed() {
         changes.value += 1

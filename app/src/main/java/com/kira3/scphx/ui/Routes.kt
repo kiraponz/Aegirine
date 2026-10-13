@@ -53,3 +53,11 @@ data class CheatsRoute(
 /** The games to pick from for their cheats, a page of the global settings. */
 @Serializable
 data object CheatGamesRoute : NavKey
+
+/** Backing up and restoring the app's data, a page of the global settings. */
+@Serializable
+data object BackupRoute : NavKey
+
+/** The save states games have left, exported and imported here, a page of the global settings. */
+@Serializable
+data object SaveStatesRoute : NavKey

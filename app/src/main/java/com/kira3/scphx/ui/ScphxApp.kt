@@ -13,6 +13,8 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.kira3.scphx.ui.backup.BackupScreen
+import com.kira3.scphx.ui.backup.SaveStatesScreen
 import com.kira3.scphx.ui.bios.BiosScreen
 import com.kira3.scphx.ui.memcards.MemoryCardSavesScreen
 import com.kira3.scphx.ui.memcards.MemoryCardsScreen
@@ -38,7 +40,7 @@ fun ScphxApp() {
     // Beside the settings list, opening something replaces what is open in the detail pane.
     fun openDetail(route: NavKey) {
         val last = backStack.lastOrNull()
-        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute) {
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute || last is BackupRoute || last is SaveStatesRoute) {
             while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
         }
         backStack.add(route)
@@ -101,6 +103,10 @@ fun ScphxApp() {
                     cheatsSelected = backStack.lastOrNull().let {
                         it is CheatGamesRoute || it is CheatsRoute && it.fromGlobal == (route.serial == null)
                     },
+                    backupSelected = backStack.lastOrNull() is BackupRoute,
+                    onOpenBackup = { openDetail(BackupRoute) },
+                    statesSelected = backStack.lastOrNull() is SaveStatesRoute,
+                    onOpenStates = { openDetail(SaveStatesRoute) },
                     onOpenCheats = {
                         // A game's settings go straight to its cheats; the global ones pick a game first.
                         openDetail(route.serial?.let { CheatsRoute(it, route.gameTitle) } ?: CheatGamesRoute)
@@ -156,6 +162,16 @@ fun ScphxApp() {
                     gameTitle = route.gameTitle,
                     onBack = { backStack.removeLastOrNull() },
                 )
+            }
+            entry<BackupRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
+                BackupScreen(onBack = { backStack.removeLastOrNull() })
+            }
+            entry<SaveStatesRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
+                SaveStatesScreen(onBack = { backStack.removeLastOrNull() })
             }
             entry<GpuDriverRoute>(
                 metadata = { route ->

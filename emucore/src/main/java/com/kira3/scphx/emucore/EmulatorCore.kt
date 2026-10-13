@@ -47,6 +47,9 @@ class EmulatorCore(context: Context) {
     /** Where the core keeps its memory cards. */
     val memoryCardsDir: File = File(dataDir, "memcards")
 
+    /** The save states (`<serial> (<CRC>).<slot>.p2s`), and the resume and rewind states. */
+    val saveStatesDir: File = File(dataDir, "sstates")
+
     /** Null when the native core loaded; otherwise a reason it cannot run on this device. */
     val unavailableReason: String? get() = NativeApp.loadError
 
