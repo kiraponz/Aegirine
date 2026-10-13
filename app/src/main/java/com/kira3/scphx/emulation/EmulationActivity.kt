@@ -335,7 +335,7 @@ class EmulationActivity : ComponentActivity() {
                         CheatsMenu(cheatList, ::toggleCheat, ::closeCheats)
                     }
                     if (searchOpen) {
-                        MemorySearchMenu(memorySearch, ::closeSearch)
+                        MemorySearchMenu(memorySearch, current?.memoryEditor?.enabled == true, ::closeSearch)
                     }
                     if (macrosOpen) {
                         MacrosMenu(

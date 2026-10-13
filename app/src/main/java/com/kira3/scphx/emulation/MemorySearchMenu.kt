@@ -5,7 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -54,15 +57,16 @@ import kotlinx.coroutines.launch
  * play until it changes, scan again with the new value. The state outlives the panel, so it can be
  * closed to let the game run.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun MemorySearchMenu(search: MemorySearch, onClose: () -> Unit) {
+fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Unit) {
     val state = search.state
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val text = search.valueText
     val mode = search.mode
     val value = text.trim().toLongOrNull()?.takeIf { it >= 0 }
+    var editing by remember { mutableStateOf<MemorySearch.Hit?>(null) }
 
     // Live values of the listed addresses, while the panel is up (they move once the game runs).
     LaunchedEffect(state.hits.size) {
@@ -71,6 +75,8 @@ fun MemorySearchMenu(search: MemorySearch, onClose: () -> Unit) {
             search.refresh()
         }
     }
+
+    editing?.let { EditValueDialog(search, it) { editing = null } }
 
     Box(
         Modifier
@@ -177,7 +183,10 @@ fun MemorySearchMenu(search: MemorySearch, onClose: () -> Unit) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { copyAddress(context, hit.address) }
+                            .combinedClickable(
+                                onClick = { if (editable) editing = hit else copyAddress(context, hit.address) },
+                                onLongClick = { copyAddress(context, hit.address) },
+                            )
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -192,7 +201,7 @@ fun MemorySearchMenu(search: MemorySearch, onClose: () -> Unit) {
                 }
                 if (state.hits.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.search_tap_to_copy),
+                        stringResource(if (editable) R.string.search_tap_to_edit else R.string.search_tap_to_copy),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -200,6 +209,48 @@ fun MemorySearchMenu(search: MemorySearch, onClose: () -> Unit) {
             }
         }
     }
+}
+
+/** Asks for a new value for [hit] and writes it. */
+@Composable
+private fun EditValueDialog(search: MemorySearch, hit: MemorySearch.Hit, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val max = (1L shl (8 * search.state.size)) - 1
+    var text by remember { mutableStateOf(hit.value.toString()) }
+    val value = text.toLongOrNull()?.takeIf { it in 0..max }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.search_edit_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("%08X".format(hit.address), fontFamily = FontFamily.Monospace)
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it.filter(Char::isDigit).take(10) },
+                    label = { Text(stringResource(R.string.search_edit_value, max.toString())) },
+                    singleLine = true,
+                    isError = value == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = value != null,
+                onClick = {
+                    scope.launch {
+                        if (!search.write(hit.address, value!!)) {
+                            Toast.makeText(context, R.string.search_edit_failed, Toast.LENGTH_SHORT).show()
+                        }
+                        onDismiss()
+                    }
+                },
+            ) { Text(stringResource(R.string.search_edit_write)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) } },
+    )
 }
 
 private fun modeLabel(mode: Mode) = when (mode) {

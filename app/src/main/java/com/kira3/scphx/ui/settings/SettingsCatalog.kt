@@ -289,6 +289,14 @@ object SettingsCatalog {
                 ),
             ),
         ),
+        SettingsSection(
+            R.string.settings_section_memory_editor,
+            listOf(
+                Toggle(
+                    "memoryEditor.enabled", R.string.settings_memory_editor, R.string.settings_memory_editor_summary,
+                ),
+            ),
+        ),
     )
 
     private fun shadeBoostSlider(path: String, title: Int) = Slider(

@@ -649,6 +649,11 @@
     <string name="search_count">%1$d match(es)</string>
     <string name="search_tap_to_copy">Tap an address to copy it.</string>
     <string name="search_copied">Copied %1$s</string>
+    <string name="search_tap_to_edit">Tap a row to change its value, or long-press to copy the address.</string>
+    <string name="search_edit_title">Change value</string>
+    <string name="search_edit_value">New value (0 to %1$s)</string>
+    <string name="search_edit_write">Write</string>
+    <string name="search_edit_failed">Could not write to memory</string>
     <string name="search_mode_exact">Equals</string>
     <string name="search_mode_changed">Changed</string>
     <string name="search_mode_unchanged">Unchanged</string>
@@ -710,7 +715,10 @@
     </plurals>
 
     <string name="settings_misc">Miscellaneous</string>
-    <string name="settings_misc_summary">Gemini</string>
+    <string name="settings_misc_summary">Gemini, memory editor</string>
+    <string name="settings_section_memory_editor">Memory editor</string>
+    <string name="settings_memory_editor">Memory editor</string>
+    <string name="settings_memory_editor_summary">Lets the memory search in the in-game menu change the values it finds. Changing memory can crash or corrupt the game</string>
     <string name="settings_section_gemini">Gemini</string>
     <string name="settings_gemini_enabled">Gemini assistant</string>
     <string name="settings_gemini_enabled_summary">Shows an AI button over the game. It sends a screenshot of the game and your question to Google\'s Gemini API</string>

@@ -31,6 +31,7 @@ data class EmulatorSettings(
     val rewind: RewindSettings = RewindSettings(),
     val controls: ControlsSettings = ControlsSettings(),
     val gemini: GeminiSettings = GeminiSettings(),
+    val memoryEditor: MemoryEditorSettings = MemoryEditorSettings(),
 ) {
     val effectiveVu1ClampMode: Int get() = if (cpu.vu1ClampMode < 0) cpu.vuClampMode else cpu.vu1ClampMode
 }
@@ -169,6 +170,13 @@ data class GeminiSettings(
     val systemPrompt: String = "",
     /** Show the saved memos over the game. */
     val memosVisible: Boolean = true,
+)
+
+/** Writing to the game's memory from the memory search. App side only: none of these reach the core. */
+@Serializable
+data class MemoryEditorSettings(
+    /** Let the memory search change the values it lists. */
+    val enabled: Boolean = false,
 )
 
 /** Audio output (SPU2). */

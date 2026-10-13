@@ -474,6 +474,12 @@ class EmulatorCore(context: Context) {
         return bytes.takeIf { NativeApp.readEeMemory(address, it) }
     }
 
+    /** Writes [value] as [size] (1, 2 or 4) little-endian bytes at [address]. False with no game or out of range. */
+    fun writeValue(address: Int, size: Int, value: Long): Boolean {
+        val bytes = ByteArray(size) { ((value ushr (8 * it)) and 0xFF).toByte() }
+        return NativeApp.writeEeMemory(address, bytes)
+    }
+
     /** "00000000" until the game's ELF is running. */
     val gameCrc: String get() = runCatching { NativeApp.getGameCRC() }.getOrDefault("00000000")
 

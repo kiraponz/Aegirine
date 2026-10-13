@@ -157,6 +157,7 @@ internal object NativeApp {
     @JvmStatic external fun getFPS(): Float
     @JvmStatic external fun getFrameCount(): Long
     @JvmStatic external fun readEeMemory(address: Int, out: ByteArray): Boolean
+    @JvmStatic external fun writeEeMemory(address: Int, data: ByteArray): Boolean
 
     // ---- Save states ----
 
