@@ -12,6 +12,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ARMSX2="$ROOT/external/armsx2"
 
+# A source archive (make-source-archive.sh) already holds the prepared tree, and no git.
+if [ -f "$ROOT/external/armsx2.commit" ]; then
+	echo "external/armsx2 comes prepared with this source archive"
+	exit 0
+fi
+
 git -C "$ROOT" submodule update --init --depth 1 external/armsx2
 
 python3 "$ARMSX2/platforms/android/app/src/main/cpp/3rdparty/shaderc/utils/git-sync-deps"

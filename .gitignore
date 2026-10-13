@@ -30,3 +30,6 @@ keystore.properties
 /AGENTS.md
 /CLAUDE.md
 /docs/
+
+# Written into source archives only (scripts/make-source-archive.sh)
+/external/armsx2.commit
