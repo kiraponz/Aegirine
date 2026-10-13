@@ -17,7 +17,7 @@ import java.io.File
  * FindClass to call the callbacks at the bottom. Only the natives v1 uses are declared;
  * the rest of the core's ~175 entry points can be added here as they are needed.
  *
- * Use [com.kira3.scphx.emucore.EmulatorCore] instead of calling this directly.
+ * Use [com.kira3.ametrine.emucore.EmulatorCore] instead of calling this directly.
  */
 internal object NativeApp {
     private const val TAG = "NativeApp"

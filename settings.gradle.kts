@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SCPHX"
+rootProject.name = "Ametrine"
 include(":app")
 include(":emucore")

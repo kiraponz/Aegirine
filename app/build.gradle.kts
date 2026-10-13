@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.kira3.scphx"
+    namespace = "com.kira3.ametrine"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.kira3.scphx"
+        applicationId = "com.kira3.ametrine"
         minSdk = 29
         targetSdk = 37
         versionCode = 1

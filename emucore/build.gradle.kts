@@ -25,7 +25,7 @@ fun armsx2Args(buildType: String) = listOf(
 )
 
 android {
-    namespace = "com.kira3.scphx.emucore"
+    namespace = "com.kira3.ametrine.emucore"
     compileSdk {
         version = release(37)
     }

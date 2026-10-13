@@ -1,16 +1,16 @@
 <resources>
-    <!-- Window theme only (shown until Compose draws). Colors come from ScphxTheme. -->
-    <style name="Theme.Scphx" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Window theme only (shown until Compose draws). Colors come from AmetrineTheme. -->
+    <style name="Theme.Ametrine" parent="android:Theme.Material.Light.NoActionBar" />
 
     <!-- Invisible hop between two gameplay processes. -->
-    <style name="Theme.Scphx.Relaunch" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Ametrine.Relaunch" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 
     <!-- Gameplay: black until the first frame. -->
-    <style name="Theme.Scphx.Emulation" parent="android:Theme.Material.NoActionBar.Fullscreen">
+    <style name="Theme.Ametrine.Emulation" parent="android:Theme.Material.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>
