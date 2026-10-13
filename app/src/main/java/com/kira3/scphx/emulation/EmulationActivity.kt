@@ -342,7 +342,7 @@ class EmulationActivity : ComponentActivity() {
                             current = null,
                             suggestions = memorySearch.state.hits.map { it.address to memorySearch.state.size },
                             onDismiss = ::closeWaitDialog,
-                            onSave = { condition, seconds ->
+                            onSave = { condition, seconds, _ ->
                                 if (condition != null) {
                                     macroRecorder.addWait(condition, seconds?.let(::secondsToFrames))
                                     showMessage(getString(R.string.macro_wait_added))
@@ -958,6 +958,11 @@ class EmulationActivity : ComponentActivity() {
         override fun setStopCondition(macro: Macro, condition: MemoryCondition?) {
             if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
             updateMacro(macro.id) { it.copy(stopWhen = condition) }
+        }
+
+        override fun replace(macro: Macro) {
+            if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
+            updateMacro(macro.id) { macro }
         }
 
         override fun delete(macro: Macro) {

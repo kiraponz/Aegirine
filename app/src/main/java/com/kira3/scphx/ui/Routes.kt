@@ -54,6 +54,19 @@ data class CheatsRoute(
 @Serializable
 data object CheatGamesRoute : NavKey
 
+/** A game's macros, a page of that game's settings. */
+@Serializable
+data class MacrosRoute(
+    val serial: String,
+    val gameTitle: String? = null,
+    /** Opened from the global settings, where the game was picked from [MacroGamesRoute]. */
+    val fromGlobal: Boolean = false,
+) : NavKey
+
+/** The games to pick from for their macros, a page of the global settings. */
+@Serializable
+data object MacroGamesRoute : NavKey
+
 /** Backing up and restoring the app's data, a page of the global settings. */
 @Serializable
 data object BackupRoute : NavKey

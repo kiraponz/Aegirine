@@ -1,5 +1,6 @@
 package com.kira3.scphx.emulation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,16 +64,22 @@ import com.kira3.scphx.data.macro.Comparison
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.data.macro.MemoryCondition
 
-/** What the macro screens can ask for. */
-interface MacroActions {
-    fun play(macro: Macro)
-    fun stop()
-    fun record()
+/** What changing a game's macros takes, in or out of the game. */
+interface MacroEditActions {
     fun rename(macro: Macro, name: String)
     fun setLoop(macro: Macro, loop: Boolean)
     fun setStartCondition(macro: Macro, condition: MemoryCondition?)
     fun setStopCondition(macro: Macro, condition: MemoryCondition?)
+    /** Replaces the macro with the same id by [macro] (the editor's result). */
+    fun replace(macro: Macro)
     fun delete(macro: Macro)
+}
+
+/** What the macro screens in the game can ask for. */
+interface MacroActions : MacroEditActions {
+    fun play(macro: Macro)
+    fun stop()
+    fun record()
     fun manage()
 }
 
@@ -194,9 +201,20 @@ fun MacrosMenu(
     suggestions: List<Pair<Int, Int>>,
     onClose: () -> Unit,
 ) {
-    var editing by remember { mutableStateOf<Pair<Macro, Boolean>?>(null) }
-    var renaming by remember { mutableStateOf<Macro?>(null) }
-    var deleting by remember { mutableStateOf<Macro?>(null) }
+    val dialogs = rememberMacroDialogs()
+    val editing = dialogs.editor
+    if (editing != null) {
+        BackHandler { dialogs.editor = null }
+        Surface(Modifier.fillMaxSize()) {
+            MacroEditorScreen(
+                macro = editing,
+                suggestions = suggestions,
+                onSave = { actions.replace(it); dialogs.editor = null },
+                onCancel = { dialogs.editor = null },
+            )
+        }
+        return
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -241,13 +259,7 @@ fun MacrosMenu(
                                 headlineContent = { Text(macro.name, maxLines = 1) },
                                 supportingContent = { Text(macro.details()) },
                                 trailingContent = {
-                                    MacroMenu(
-                                        macro,
-                                        actions,
-                                        onRename = { renaming = macro },
-                                        onDelete = { deleting = macro },
-                                        onCondition = { start -> editing = macro to start },
-                                    )
+                                    MacroMenu(macro, actions, dialogs)
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.clickable { actions.play(macro) },
@@ -259,22 +271,40 @@ fun MacrosMenu(
         }
     }
 
-    editing?.let { (macro, start) ->
+    MacroDialogs(dialogs, actions, suggestions)
+}
+
+/** Which of a macro's dialogs is up: its condition, rename or delete, or the editor. */
+class MacroDialogs {
+    /** The macro and whether the condition is its start condition (else its stop condition). */
+    var condition by mutableStateOf<Pair<Macro, Boolean>?>(null)
+    var renaming by mutableStateOf<Macro?>(null)
+    var deleting by mutableStateOf<Macro?>(null)
+    var editor by mutableStateOf<Macro?>(null)
+}
+
+@Composable
+fun rememberMacroDialogs() = remember { MacroDialogs() }
+
+/** The dialogs of [dialogs], for a list of macros. */
+@Composable
+fun MacroDialogs(dialogs: MacroDialogs, actions: MacroEditActions, suggestions: List<Pair<Int, Int>>) {
+    dialogs.condition?.let { (macro, start) ->
         ConditionDialog(
             kind = if (start) ConditionKind.Start else ConditionKind.Stop,
             current = if (start) macro.startWhen else macro.stopWhen,
             suggestions = suggestions,
-            onDismiss = { editing = null },
-            onSave = { condition, _ ->
-                editing = null
+            onDismiss = { dialogs.condition = null },
+            onSave = { condition, _, _ ->
+                dialogs.condition = null
                 if (start) actions.setStartCondition(macro, condition) else actions.setStopCondition(macro, condition)
             },
         )
     }
-    renaming?.let { macro ->
+    dialogs.renaming?.let { macro ->
         var name by remember(macro.id) { mutableStateOf(macro.name) }
         AlertDialog(
-            onDismissRequest = { renaming = null },
+            onDismissRequest = { dialogs.renaming = null },
             title = { Text(stringResource(R.string.macro_rename)) },
             text = {
                 OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -283,40 +313,39 @@ fun MacrosMenu(
                 TextButton(
                     enabled = name.isNotBlank(),
                     onClick = {
-                        renaming = null
+                        dialogs.renaming = null
                         actions.rename(macro, name.trim())
                     },
                 ) { Text(stringResource(R.string.macro_rename)) }
             },
             dismissButton = {
-                TextButton(onClick = { renaming = null }) { Text(stringResource(R.string.menu_cancel)) }
+                TextButton(onClick = { dialogs.renaming = null }) { Text(stringResource(R.string.menu_cancel)) }
             },
         )
     }
-    deleting?.let { macro ->
+    dialogs.deleting?.let { macro ->
         AlertDialog(
-            onDismissRequest = { deleting = null },
+            onDismissRequest = { dialogs.deleting = null },
             title = { Text(stringResource(R.string.macro_delete_title, macro.name)) },
             confirmButton = {
                 TextButton(onClick = {
-                    deleting = null
+                    dialogs.deleting = null
                     actions.delete(macro)
                 }) { Text(stringResource(R.string.macro_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.menu_cancel)) }
+                TextButton(onClick = { dialogs.deleting = null }) { Text(stringResource(R.string.menu_cancel)) }
             },
         )
     }
 }
 
+/** The ︙ menu of a macro in a list. */
 @Composable
-private fun MacroMenu(
+fun MacroMenu(
     macro: Macro,
-    actions: MacroActions,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
-    onCondition: (start: Boolean) -> Unit,
+    actions: MacroEditActions,
+    dialogs: MacroDialogs,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -330,26 +359,30 @@ private fun MacroMenu(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.macro_start_condition)) },
-                onClick = { open = false; onCondition(true) },
+                onClick = { open = false; dialogs.condition = macro to true },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.macro_stop_condition)) },
-                onClick = { open = false; onCondition(false) },
+                onClick = { open = false; dialogs.condition = macro to false },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.macro_edit)) },
+                onClick = { open = false; dialogs.editor = macro },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.macro_rename)) },
-                onClick = { open = false; onRename() },
+                onClick = { open = false; dialogs.renaming = macro },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.macro_delete)) },
-                onClick = { open = false; onDelete() },
+                onClick = { open = false; dialogs.deleting = macro },
             )
         }
     }
 }
 
 @Composable
-private fun Macro.details(): String {
+fun Macro.details(): String {
     val inputs = pluralStringResource(R.plurals.macro_inputs, events.size, events.size)
     val parts = mutableListOf(inputs, durationLabel(length * 1000 / FRAMES_PER_SECOND))
     if (loop) parts += stringResource(R.string.macro_loop)
@@ -379,10 +412,15 @@ fun ConditionDialog(
     current: MemoryCondition?,
     suggestions: List<Pair<Int, Int>>,
     onDismiss: () -> Unit,
-    /** The condition (null clears it) and, for a wait point, the timeout in seconds (null: wait for ever). */
-    onSave: (MemoryCondition?, Long?) -> Unit,
+    /** The condition (null clears it); for a wait point, the timeout in seconds (null: wait for ever) and its frame. */
+    onSave: (MemoryCondition?, Long?, Long) -> Unit,
+    /** Asks at which frame the wait point is, to be edited by hand. */
+    showFrame: Boolean = false,
+    initialFrame: Long = 0L,
+    initialTimeoutSeconds: Long? = null,
 ) {
-    var timeout by remember { mutableStateOf("") }
+    var timeout by remember { mutableStateOf(initialTimeoutSeconds?.toString().orEmpty()) }
+    var frame by remember { mutableStateOf(initialFrame.toString()) }
     var address by remember { mutableStateOf(current?.let { "%08X".format(it.address) }.orEmpty()) }
     var size by remember { mutableStateOf(current?.size ?: 4) }
     var op by remember { mutableStateOf(current?.op ?: Comparison.Equal) }
@@ -409,7 +447,7 @@ fun ConditionDialog(
                         when (kind) {
                             ConditionKind.Start -> R.string.macro_start_hint
                             ConditionKind.Stop -> R.string.macro_stop_hint
-                            ConditionKind.Wait -> R.string.macro_wait_hint
+                            ConditionKind.Wait -> if (showFrame) R.string.macro_wait_hint_edit else R.string.macro_wait_hint
                         },
                     ),
                     style = MaterialTheme.typography.bodySmall,
@@ -455,6 +493,17 @@ fun ConditionDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (showFrame) {
+                    OutlinedTextField(
+                        frame,
+                        { frame = it.filter(Char::isDigit).take(8) },
+                        label = { Text(stringResource(R.string.macro_editor_at_frame)) },
+                        supportingText = { Text(stringResource(R.string.macro_editor_frame_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 if (kind == ConditionKind.Wait) {
                     OutlinedTextField(
                         timeout,
@@ -469,14 +518,17 @@ fun ConditionDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = parsed != null, onClick = { onSave(parsed, timeout.toLongOrNull()) }) {
+            TextButton(
+                enabled = parsed != null && frame.toLongOrNull() != null,
+                onClick = { onSave(parsed, timeout.toLongOrNull(), frame.toLongOrNull() ?: 0L) },
+            ) {
                 Text(stringResource(R.string.macro_condition_save))
             }
         },
         dismissButton = {
             Row {
-                if (current != null) {
-                    TextButton(onClick = { onSave(null, null) }) { Text(stringResource(R.string.macro_condition_clear)) }
+                if (current != null && !showFrame) {
+                    TextButton(onClick = { onSave(null, null, 0L) }) { Text(stringResource(R.string.macro_condition_clear)) }
                 }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
             }

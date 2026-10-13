@@ -55,6 +55,14 @@ data class MacroWait(
     val timeout: Long? = null,
 )
 
+/** This macro with its inputs and wait points in time order, and long enough to hold them. */
+fun Macro.normalized(): Macro {
+    val sortedEvents = events.sortedBy { it.t }
+    val sortedWaits = waits.sortedBy { it.t }
+    val last = maxOf(sortedEvents.lastOrNull()?.t ?: 0L, sortedWaits.lastOrNull()?.t ?: 0L)
+    return copy(events = sortedEvents, waits = sortedWaits, length = maxOf(length, last))
+}
+
 /** Nominal frames per second, to convert the milliseconds of older macros. */
 private const val LEGACY_FPS = 60
 

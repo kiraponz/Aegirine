@@ -82,6 +82,8 @@ fun SettingsHomeScreen(
     onOpenSearch: () -> Unit,
     cheatsSelected: Boolean,
     onOpenCheats: () -> Unit,
+    macrosSelected: Boolean,
+    onOpenMacros: () -> Unit,
     backupSelected: Boolean,
     onOpenBackup: () -> Unit,
     statesSelected: Boolean,
@@ -150,13 +152,25 @@ fun SettingsHomeScreen(
                 SegmentedListItem(
                     selected = cheatsSelected,
                     onClick = onOpenCheats,
-                    shapes = ListItemDefaults.segmentedShapes(0, 1),
+                    shapes = ListItemDefaults.segmentedShapes(0, 2),
                     colors = settingsListColors(highlightSelected = true),
                     modifier = Modifier.animateItem().padding(top = 12.dp),
                     leadingContent = { ShapedIcon(MaterialShapes.Flower.toShape(), R.drawable.ic_cheats, categories.size) },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
                     supportingContent = { Text(stringResource(R.string.settings_cheats_summary)) },
                 ) { Text(stringResource(R.string.settings_cheats)) }
+            }
+            item(key = "macros") {
+                SegmentedListItem(
+                    selected = macrosSelected,
+                    onClick = onOpenMacros,
+                    shapes = ListItemDefaults.segmentedShapes(1, 2),
+                    colors = settingsListColors(highlightSelected = true),
+                    modifier = Modifier.animateItem(),
+                    leadingContent = { ShapedIcon(MaterialShapes.Pill.toShape(), R.drawable.ic_macro, categories.size + 3) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                    supportingContent = { Text(stringResource(R.string.settings_macros_summary)) },
+                ) { Text(stringResource(R.string.settings_macros)) }
             }
             // The app's own data, not a game's.
             if (!isGame) {

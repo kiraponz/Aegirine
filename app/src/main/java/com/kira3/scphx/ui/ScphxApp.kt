@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.kira3.scphx.R
 import com.kira3.scphx.ui.backup.BackupScreen
 import com.kira3.scphx.ui.backup.SaveStatesScreen
 import com.kira3.scphx.ui.bios.BiosScreen
@@ -22,6 +23,7 @@ import com.kira3.scphx.ui.library.LibraryScreen
 import com.kira3.scphx.ui.settings.CheatGamesScreen
 import com.kira3.scphx.ui.settings.CheatsScreen
 import com.kira3.scphx.ui.settings.GpuDriverScreen
+import com.kira3.scphx.ui.settings.MacrosScreen
 import com.kira3.scphx.ui.settings.SettingsCategoryScreen
 import com.kira3.scphx.ui.settings.SettingsDetailPlaceholder
 import com.kira3.scphx.ui.settings.SettingsHomeScreen
@@ -40,7 +42,7 @@ fun ScphxApp() {
     // Beside the settings list, opening something replaces what is open in the detail pane.
     fun openDetail(route: NavKey) {
         val last = backStack.lastOrNull()
-        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute || last is BackupRoute || last is SaveStatesRoute) {
+        if (last is SettingsCategoryRoute || last is SettingsSearchRoute || last is GpuDriverRoute || last is BiosRoute || last is MemoryCardsRoute || last is MemoryCardRoute || last is CheatsRoute || last is CheatGamesRoute || last is MacrosRoute || last is MacroGamesRoute || last is BackupRoute || last is SaveStatesRoute) {
             while (backStack.lastOrNull() !is SettingsRoute) backStack.removeLastOrNull()
         }
         backStack.add(route)
@@ -103,6 +105,12 @@ fun ScphxApp() {
                     cheatsSelected = backStack.lastOrNull().let {
                         it is CheatGamesRoute || it is CheatsRoute && it.fromGlobal == (route.serial == null)
                     },
+                    macrosSelected = backStack.lastOrNull().let {
+                        it is MacroGamesRoute || it is MacrosRoute && it.fromGlobal == (route.serial == null)
+                    },
+                    onOpenMacros = {
+                        openDetail(route.serial?.let { MacrosRoute(it, route.gameTitle) } ?: MacroGamesRoute)
+                    },
                     backupSelected = backStack.lastOrNull() is BackupRoute,
                     onOpenBackup = { openDetail(BackupRoute) },
                     statesSelected = backStack.lastOrNull() is SaveStatesRoute,
@@ -158,6 +166,28 @@ fun ScphxApp() {
                 },
             ) { route ->
                 CheatsScreen(
+                    serial = route.serial,
+                    gameTitle = route.gameTitle,
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<MacroGamesRoute>(
+                metadata = { ListDetailSceneStrategy.detailPane(sceneKey = SettingsRoute()) },
+            ) {
+                CheatGamesScreen(
+                    title = R.string.settings_macros,
+                    subtitle = R.string.macros_pick_game,
+                    onPick = { serial, title -> backStack.add(MacrosRoute(serial, title, fromGlobal = true)) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<MacrosRoute>(
+                metadata = { route ->
+                    val list = if (route.fromGlobal) SettingsRoute() else SettingsRoute(route.serial, route.gameTitle)
+                    ListDetailSceneStrategy.detailPane(sceneKey = list)
+                },
+            ) { route ->
+                MacrosScreen(
                     serial = route.serial,
                     gameTitle = route.gameTitle,
                     onBack = { backStack.removeLastOrNull() },

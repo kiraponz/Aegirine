@@ -55,12 +55,14 @@ class CheatGamesViewModel(repository: LibraryRepository) : ViewModel() {
     }
 }
 
-/** Which game's cheats to edit, from the global settings. */
+/** Which game to open a page for (its cheats or macros), from the global settings. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CheatGamesScreen(
     onPick: (serial: String, title: String) -> Unit,
     onBack: () -> Unit,
+    title: Int = R.string.settings_cheats,
+    subtitle: Int = R.string.cheats_pick_game,
     viewModel: CheatGamesViewModel = viewModel(factory = CheatGamesViewModel.Factory),
 ) {
     val games by viewModel.games.collectAsStateWithLifecycle()
@@ -71,8 +73,8 @@ fun CheatGamesScreen(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.settings_cheats)) },
-                subtitle = { Text(stringResource(R.string.cheats_pick_game)) },
+                title = { Text(stringResource(title)) },
+                subtitle = { Text(stringResource(subtitle)) },
                 navigationIcon = { BackButton(onBack) },
                 colors = settingsTopBarColors(),
                 scrollBehavior = scrollBehavior,
