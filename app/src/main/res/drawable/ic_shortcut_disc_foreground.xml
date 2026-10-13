@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The disc inside the 72dp circle an adaptive icon always shows (66 of 108dp). -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_disc"
+    android:inset="19.4%" />

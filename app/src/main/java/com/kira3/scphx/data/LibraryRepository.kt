@@ -2,12 +2,18 @@ package com.kira3.scphx.data
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
+import android.graphics.Bitmap
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
+import com.kira3.scphx.R
 import com.kira3.scphx.data.db.GameDao
 import com.kira3.scphx.data.db.GameEntity
 import com.kira3.scphx.emucore.EmulatorCore
+import com.kira3.scphx.emulation.EmulationActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -169,6 +175,25 @@ class LibraryRepository(
         }
         dao.setSerial(game.uri.toString(), serial, dbTitle)
         return serial
+    }
+
+    private val appContext = context.applicationContext
+
+    /**
+     * Asks the launcher to pin a shortcut that starts [game] directly, with [icon] (a drawn
+     * disc if null). False if the launcher can't pin shortcuts. The shortcut keeps working as long
+     * as the game folder's access does.
+     */
+    fun requestPinnedShortcut(game: Game, serial: String?, icon: Bitmap?): Boolean {
+        val manager = appContext.getSystemService(ShortcutManager::class.java)
+        if (manager == null || !manager.isRequestPinShortcutSupported) return false
+        val shortcut = ShortcutInfo.Builder(appContext, "game:${game.recordKey}")
+            .setShortLabel(game.title)
+            .setLongLabel(game.title)
+            .setIcon(icon?.let(Icon::createWithAdaptiveBitmap) ?: Icon.createWithResource(appContext, R.drawable.ic_shortcut_disc))
+            .setIntent(EmulationActivity.shortcutIntent(appContext, game.uri, serial))
+            .build()
+        return manager.requestPinShortcut(shortcut, null)
     }
 
     /** Every game image under [treeUri], subfolders included. */

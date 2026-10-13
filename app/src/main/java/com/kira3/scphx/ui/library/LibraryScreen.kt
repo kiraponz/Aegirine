@@ -5,6 +5,8 @@ import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +53,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -69,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kira3.scphx.R
 import com.kira3.scphx.data.Game
+import com.kira3.scphx.data.SaveIconChoice
 import com.kira3.scphx.emulation.EmulationActivity
 import com.kira3.scphx.ui.theme.ScphxTheme
 
@@ -131,6 +135,9 @@ fun LibraryScreen(
         onQueryChanged = viewModel::onQueryChanged,
         onFavoriteToggled = viewModel::onFavoriteToggled,
         onRenamed = viewModel::onRenamed,
+        onAddShortcut = viewModel::onAddShortcutClicked,
+        onShortcutIconChosen = viewModel::onShortcutIconChosen,
+        onShortcutIconDismissed = viewModel::onShortcutIconDismissed,
     )
 }
 
@@ -140,6 +147,7 @@ private val LibraryMessage.textRes: Int
         LibraryMessage.BiosRequired -> R.string.library_message_bios_required
         LibraryMessage.CoreUnavailable -> R.string.library_message_core_unavailable
         LibraryMessage.NoSerial -> R.string.library_message_no_serial
+        LibraryMessage.ShortcutUnsupported -> R.string.library_message_shortcut_unsupported
     }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -158,11 +166,17 @@ private fun LibraryContent(
     onQueryChanged: (String) -> Unit,
     onFavoriteToggled: (Game) -> Unit,
     onRenamed: (Game, String) -> Unit,
+    onAddShortcut: (Game) -> Unit,
+    onShortcutIconChosen: (SaveIconChoice?) -> Unit,
+    onShortcutIconDismissed: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var searching by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Game?>(null) }
+    state.shortcutIconRequest?.let { request ->
+        ShortcutIconDialog(request, onChosen = onShortcutIconChosen, onDismiss = onShortcutIconDismissed)
+    }
     renaming?.let { game ->
         RenameDialog(
             game = game,
@@ -291,6 +305,7 @@ private fun LibraryContent(
                             onClick = { onGameClick(game) },
                             onSettings = { onGameSettingsClick(game) },
                             onFavoriteToggled = { onFavoriteToggled(game) },
+                            onAddShortcut = { onAddShortcut(game) },
                             onRename = { renaming = game },
                             onResetTitle = { onRenamed(game, "") },
                         )
@@ -308,6 +323,7 @@ private fun GameRow(
     onClick: () -> Unit,
     onSettings: () -> Unit,
     onFavoriteToggled: () -> Unit,
+    onAddShortcut: () -> Unit,
     onRename: () -> Unit,
     onResetTitle: () -> Unit,
 ) {
@@ -343,6 +359,13 @@ private fun GameRow(
         )
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.library_add_shortcut)) },
+                onClick = {
+                    menuOpen = false
+                    onAddShortcut()
+                },
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(R.string.library_rename)) },
                 onClick = {
                     menuOpen = false
@@ -360,6 +383,44 @@ private fun GameRow(
             }
         }
     }
+}
+
+/** Asks which save's icon the shortcut gets, for a game that has no save of its own. */
+@Composable
+private fun ShortcutIconDialog(request: ShortcutIconRequest, onChosen: (SaveIconChoice?) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.library_shortcut_icon_title)) },
+        text = {
+            LazyColumn {
+                item(key = "app-icon") {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.library_shortcut_icon_disc)) },
+                        leadingContent = {
+                            Image(
+                                painterResource(R.drawable.ic_disc),
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                            )
+                        },
+                        modifier = Modifier.clickable { onChosen(null) },
+                    )
+                }
+                items(request.choices, key = { "${it.cardName}/${it.saveName}" }) { choice ->
+                    ListItem(
+                        headlineContent = { Text(choice.title ?: choice.saveName, maxLines = 2) },
+                        supportingContent = { Text(choice.cardName, maxLines = 1) },
+                        leadingContent = {
+                            Image(choice.icon.asImageBitmap(), contentDescription = null, modifier = Modifier.size(48.dp))
+                        },
+                        modifier = Modifier.clickable { onChosen(choice) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_shortcut_icon_cancel)) } },
+    )
 }
 
 @Composable
@@ -470,6 +531,9 @@ private fun LibraryContentPreview() {
             onQueryChanged = {},
             onFavoriteToggled = {},
             onRenamed = { _, _ -> },
+            onAddShortcut = {},
+            onShortcutIconChosen = {},
+            onShortcutIconDismissed = {},
         )
     }
 }

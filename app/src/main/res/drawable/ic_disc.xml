@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A game disc seen from above: silver with two glints, a dark label and a hub with a hole. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="66dp"
+    android:height="66dp"
+    android:viewportWidth="66"
+    android:viewportHeight="66">
+    <path android:pathData="M2,33a31,31 0 1,0 62,0a31,31 0 1,0 -62,0z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="10"
+                android:startY="10"
+                android:endX="56"
+                android:endY="56"
+                android:type="linear">
+                <item android:color="#FFF4F6FA" android:offset="0.0" />
+                <item android:color="#FFB3B9C8" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M2,33a31,31 0 1,0 62,0a31,31 0 1,0 -62,0z"
+        android:strokeColor="#FF8A90A0"
+        android:strokeWidth="0.8" />
+    <path
+        android:fillColor="#59FFFFFF"
+        android:pathData="M33,33L15.22,7.61A31,31 0 0,1 33,2z" />
+    <path
+        android:fillColor="#59FFFFFF"
+        android:pathData="M33,33L50.78,58.39A31,31 0 0,1 33,64z" />
+    <path
+        android:fillColor="#FF26327A"
+        android:pathData="M14,33a19,19 0 1,0 38,0a19,19 0 1,0 -38,0z" />
+    <path
+        android:fillColor="#FF5C6BC0"
+        android:pathData="M18,33a15,15 0 1,0 30,0a15,15 0 1,0 -30,0z M20,33a13,13 0 1,1 26,0a13,13 0 1,1 -26,0z"
+        android:fillType="evenOdd" />
+    <path
+        android:fillColor="#FFD5D9E3"
+        android:fillType="evenOdd"
+        android:pathData="M24,33a9,9 0 1,0 18,0a9,9 0 1,0 -18,0z M29,33a4,4 0 1,1 8,0a4,4 0 1,1 -8,0z" />
+</vector>

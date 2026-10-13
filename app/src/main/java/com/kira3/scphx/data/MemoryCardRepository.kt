@@ -2,14 +2,22 @@ package com.kira3.scphx.data
 
 import android.app.ActivityManager
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import android.provider.OpenableColumns
 import com.kira3.scphx.data.memcard.CardState
 import com.kira3.scphx.data.memcard.FolderCard
 import com.kira3.scphx.data.memcard.Ps2Card
+import com.kira3.scphx.data.memcard.SaveData
 import com.kira3.scphx.data.memcard.SaveInfo
 import com.kira3.scphx.data.memcard.SaveStore
 import com.kira3.scphx.data.memcard.WriteResult
+import com.kira3.scphx.data.memcard.iconSysIconName
+import com.kira3.scphx.data.memcard.isSystemSave
+import com.kira3.scphx.data.memcard.parseSaveIcon
+import com.kira3.scphx.data.memcard.render
+import com.kira3.scphx.data.memcard.serialOfSave
 import com.kira3.scphx.emucore.EmulatorCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +38,9 @@ data class MemoryCard(
     val bytes: Long,
     val modified: Long,
 )
+
+/** A save that has an icon, drawn flat; [cardName] is the card it is on. */
+class SaveIconChoice(val cardName: String, val saveName: String, val title: String?, val icon: Bitmap)
 
 enum class MemoryCardResult { Ok, Exists, Invalid, Failed, Full, Busy }
 
@@ -199,6 +210,42 @@ class MemoryCardRepository(
         }.getOrNull()
     }
 
+    /**
+     * The icons of the saves on every card, drawn [size] pixels wide. With a [serial], only the
+     * saves of that game. Saves without a readable icon are left out.
+     */
+    suspend fun saveIcons(size: Int, fill: Float, serial: String? = null): List<SaveIconChoice> = withContext(Dispatchers.IO) {
+        list().flatMap { card ->
+            runCatching {
+                withStore(card, writable = false) { store ->
+                    store.list()
+                        .filter { !isSystemSave(it.name) && (serial == null || serialOfSave(it.name) == serial) }
+                        .mapNotNull { info ->
+                            val bitmap = store.read(info.name)?.let { iconOf(it, size, fill) } ?: return@mapNotNull null
+                            SaveIconChoice(card.name, info.name, info.title, bitmap)
+                        }
+                }
+            }.onFailure { Log.w(TAG, "Reading the saves of ${card.name} failed", it) }.getOrNull().orEmpty()
+        }
+    }
+
+    /** The icon of one save, or null if it cannot be read. */
+    suspend fun saveIcon(cardName: String, saveName: String, size: Int, fill: Float): Bitmap? = withContext(Dispatchers.IO) {
+        val card = list().firstOrNull { it.name == cardName } ?: return@withContext null
+        runCatching {
+            withStore(card, writable = false) { store -> store.read(saveName)?.let { iconOf(it, size, fill) } }
+        }.getOrNull()
+    }
+
+    private fun iconOf(save: SaveData, size: Int, fill: Float): Bitmap? {
+        val iconSys = save.files.firstOrNull { it.name.equals("icon.sys", ignoreCase = true) } ?: return null
+        val name = iconSysIconName(iconSys.data) ?: return null
+        val file = save.files.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: return null
+        val model = parseSaveIcon(file.data)
+        if (model == null) Log.w(TAG, "Could not read the icon $name of ${save.name}")
+        return model?.render(size, fill)
+    }
+
     /** The names among [names] that [target] already has a save for. */
     suspend fun conflicts(target: MemoryCard, names: List<String>): List<String> {
         val existing = listSaves(target)?.saves?.map { it.name }.orEmpty().toSet()
@@ -365,6 +412,7 @@ class MemoryCardRepository(
 
     private companion object {
         val CARD_EXTENSIONS = listOf(".ps2", ".mcr", ".mcd", ".bin", ".mc2")
+        const val TAG = "MemoryCardRepository"
         const val TEMP_SUFFIX = ".tmp"
         const val FOLDER_MARKER = "_pcsx2_superblock"
         const val PS1_SIZE = 131072L

@@ -193,7 +193,7 @@ class EmulationActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val gameUri = IntentCompat.getParcelableExtra(intent, EXTRA_GAME_URI, Uri::class.java)
+        val gameUri = IntentCompat.getParcelableExtra(intent, EXTRA_GAME_URI, Uri::class.java) ?: intent.data
         if (gameUri == null) {
             finish()
             return
@@ -331,6 +331,12 @@ class EmulationActivity : ComponentActivity() {
         } catch (e: IllegalStateException) {
             Log.e(TAG, "Core unavailable", e)
             finishWithMessage(getString(R.string.library_message_core_unavailable))
+            return
+        }
+
+        // A home screen shortcut outlives the access to the game folder.
+        if (gameUri != Uri.EMPTY && !withContext(Dispatchers.IO) { canRead(gameUri) }) {
+            finishWithMessage(getString(R.string.emulation_game_unreadable))
             return
         }
 
@@ -1147,6 +1153,9 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    private fun canRead(uri: Uri): Boolean =
+        runCatching { contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false }.getOrDefault(false)
+
     private fun finishWithMessage(message: String) {
         // Application context: this can run after the activity is already destroyed.
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
@@ -1231,6 +1240,14 @@ class EmulationActivity : ComponentActivity() {
         private const val SUSPEND_SAVE_TRIES = 10
         private const val SUSPEND_SAVE_RETRY_MS = 250L
         private const val TOAST_VISIBLE_MS = 3_500L
+
+        /**
+         * Intent for a home screen shortcut. A shortcut's extras can only hold simple values,
+         * so the URI travels as the intent's data instead of [EXTRA_GAME_URI].
+         */
+        fun shortcutIntent(context: Context, gameUri: Uri, serial: String?): Intent =
+            Intent(Intent.ACTION_VIEW, gameUri, context, EmulationActivity::class.java)
+                .putExtra(EXTRA_SERIAL, serial)
 
         fun intent(context: Context, gameUri: Uri, serial: String?): Intent =
             Intent(context, EmulationActivity::class.java)

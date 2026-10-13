@@ -42,6 +42,7 @@
     <!-- Emulation -->
     <string name="emulation_boot_failed">Could not start the game: %1$s</string>
     <string name="emulation_driver_failed">The game could not start with %1$s. Trying the system driver.</string>
+    <string name="emulation_game_unreadable">Can\'t open the game. Check the game folder in the library.</string>
     <string name="emulation_bios_missing">Select a BIOS first</string>
     <string name="emulation_fast_forward">Fast forward</string>
     <string name="emulation_state_saved">Saved to slot %1$d</string>
@@ -110,6 +111,11 @@
     <string name="library_sort_size">Size</string>
     <string name="library_favorite">Add to favorites</string>
     <string name="library_unfavorite">Remove from favorites</string>
+    <string name="library_add_shortcut">Add to home screen</string>
+    <string name="library_message_shortcut_unsupported">This launcher can\'t add shortcuts</string>
+    <string name="library_shortcut_icon_title">Shortcut icon</string>
+    <string name="library_shortcut_icon_disc">Disc</string>
+    <string name="library_shortcut_icon_cancel">Cancel</string>
     <string name="library_rename">Rename</string>
     <string name="library_rename_confirm">Save</string>
     <string name="library_reset_title">Reset title</string>

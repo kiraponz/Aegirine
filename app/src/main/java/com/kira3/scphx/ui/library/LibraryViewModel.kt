@@ -1,5 +1,6 @@
 package com.kira3.scphx.ui.library
 
+import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -13,6 +14,8 @@ import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.Game
 import com.kira3.scphx.data.LibraryRepository
 import com.kira3.scphx.data.LibrarySort
+import com.kira3.scphx.data.MemoryCardRepository
+import com.kira3.scphx.data.SaveIconChoice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,14 +43,19 @@ data class LibraryUiState(
     val gameCount: Int = 0,
     val launchRequest: LaunchRequest? = null,
     val settingsRequest: GameSettingsRequest? = null,
+    val shortcutIconRequest: ShortcutIconRequest? = null,
     val message: LibraryMessage? = null,
 )
 
-enum class LibraryMessage { ScanFailed, BiosRequired, CoreUnavailable, NoSerial }
+/** The game has no save of its own to take the shortcut's icon from: [choices] are the saves to pick one from. */
+class ShortcutIconRequest(val game: Game, val serial: String?, val choices: List<SaveIconChoice>)
+
+enum class LibraryMessage { ScanFailed, BiosRequired, CoreUnavailable, NoSerial, ShortcutUnsupported }
 
 class LibraryViewModel(
     biosRepository: BiosRepository,
     private val libraryRepository: LibraryRepository,
+    private val memoryCardRepository: MemoryCardRepository,
 ) : ViewModel() {
     private val transient = MutableStateFlow(LibraryUiState())
 
@@ -153,6 +161,46 @@ class LibraryViewModel(
         transient.update { it.copy(launchRequest = LaunchRequest(Uri.EMPTY, null)) }
     }
 
+    fun onAddShortcutClicked(game: Game) {
+        viewModelScope.launch {
+            val serial = readSerial(game) ?: return@launch
+            // The game's own save icon if there is one; otherwise the user picks among the saves.
+            val own = serial.value?.let { memoryCardRepository.saveIcons(SHORTCUT_ICON_SIZE, SHORTCUT_ICON_FILL, it) }
+                ?.firstOrNull()
+            if (own != null) {
+                pinShortcut(game, serial.value, own.icon)
+                return@launch
+            }
+            val choices = memoryCardRepository.saveIcons(PREVIEW_ICON_SIZE, 1f)
+            if (choices.isEmpty()) {
+                pinShortcut(game, serial.value, null)
+            } else {
+                transient.update { it.copy(shortcutIconRequest = ShortcutIconRequest(game, serial.value, choices)) }
+            }
+        }
+    }
+
+    /** [choice] is the save whose icon the shortcut gets, or null for the app's own icon. */
+    fun onShortcutIconChosen(choice: SaveIconChoice?) {
+        val request = uiState.value.shortcutIconRequest ?: return
+        transient.update { it.copy(shortcutIconRequest = null) }
+        viewModelScope.launch {
+            val icon = choice?.let {
+                memoryCardRepository.saveIcon(it.cardName, it.saveName, SHORTCUT_ICON_SIZE, SHORTCUT_ICON_FILL)
+            }
+            pinShortcut(request.game, request.serial, icon)
+        }
+    }
+
+    fun onShortcutIconDismissed() = transient.update { it.copy(shortcutIconRequest = null) }
+
+    private fun pinShortcut(game: Game, serial: String?, icon: Bitmap?) {
+        val pinned = runCatching { libraryRepository.requestPinnedShortcut(game, serial, icon) }
+            .onFailure { Log.e(TAG, "Pinning a shortcut for ${game.fileName} failed", it) }
+            .getOrDefault(false)
+        if (!pinned) showMessage(LibraryMessage.ShortcutUnsupported)
+    }
+
     fun onGameSettingsClicked(game: Game) {
         viewModelScope.launch {
             val serial = readSerial(game) ?: return@launch
@@ -190,10 +238,18 @@ class LibraryViewModel(
     companion object {
         private const val TAG = "LibraryViewModel"
 
+        /**
+         * An adaptive icon is 108dp and the launcher shows a circle of 72dp in the middle at most,
+         * so the square picture's corners must stay inside that: 108 * 0.46 * sqrt(2) < 72.
+         */
+        private const val SHORTCUT_ICON_SIZE = 432
+        private const val SHORTCUT_ICON_FILL = 0.46f
+        private const val PREVIEW_ICON_SIZE = 128
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val container = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as ScphxApplication).container
-                LibraryViewModel(container.biosRepository, container.libraryRepository)
+                LibraryViewModel(container.biosRepository, container.libraryRepository, container.memoryCardRepository)
             }
         }
     }
