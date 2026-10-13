@@ -166,6 +166,7 @@ class EmulationActivity : ComponentActivity() {
     private var rewindNow by mutableLongStateOf(0L)
 
     private var cheatsOpen by mutableStateOf(false)
+    private var waitDialogOpen by mutableStateOf(false)
     private var cheatList by mutableStateOf<List<Cheat>?>(null)
 
     // ---- Macros ----
@@ -188,7 +189,7 @@ class EmulationActivity : ComponentActivity() {
     private var aiBusy = false
     private var aiJob: Job? = null
 
-    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || searchOpen || aiShot != null
+    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || searchOpen || waitDialogOpen || aiShot != null
 
     /** Waits for the game's CRC, then gives the core its cheats. */
     private var cheatsJob: Job? = null
@@ -314,6 +315,7 @@ class EmulationActivity : ComponentActivity() {
                             onStop = ::stopRecording,
                             recording = true,
                             gameAspect = gameAspect,
+                            onWait = if (waitDialogOpen) null else ::openWaitDialog,
                         )
                     } else if (playingMacro != null) {
                         val waiting by macroPlayer.waiting.collectAsState()
@@ -333,6 +335,21 @@ class EmulationActivity : ComponentActivity() {
                     }
                     if (cheatsOpen) {
                         CheatsMenu(cheatList, ::toggleCheat, ::closeCheats)
+                    }
+                    if (waitDialogOpen) {
+                        ConditionDialog(
+                            kind = ConditionKind.Wait,
+                            current = null,
+                            suggestions = memorySearch.state.hits.map { it.address to memorySearch.state.size },
+                            onDismiss = ::closeWaitDialog,
+                            onSave = { condition, seconds ->
+                                if (condition != null) {
+                                    macroRecorder.addWait(condition, seconds?.let(::secondsToFrames))
+                                    showMessage(getString(R.string.macro_wait_added))
+                                }
+                                closeWaitDialog()
+                            },
+                        )
                     }
                     if (searchOpen) {
                         MemorySearchMenu(memorySearch, current?.memoryEditor?.enabled == true, ::closeSearch)
@@ -839,6 +856,25 @@ class EmulationActivity : ComponentActivity() {
 
     private fun closeMacros() {
         macrosOpen = false
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    /** Pauses the game while a wait point is set during a recording. */
+    private fun openWaitDialog() {
+        if (waitDialogOpen) return
+        gamepad.releaseAll()
+        if (core.vmState.value == VmState.Running) {
+            core.pause()
+            pausedByMenu = true
+        }
+        waitDialogOpen = true
+    }
+
+    private fun closeWaitDialog() {
+        waitDialogOpen = false
         if (pausedByMenu) {
             pausedByMenu = false
             core.resume()

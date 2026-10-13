@@ -714,6 +714,16 @@
     <string name="macro_waiting">Waiting for %1$s</string>
     <string name="macro_loop_on">Play in a loop</string>
     <string name="macro_loop_off">Play once</string>
+    <string name="macro_wait_here">Wait here</string>
+    <string name="macro_wait_added">Wait point added</string>
+    <string name="macro_wait_title">Wait here</string>
+    <string name="macro_wait_hint">When this macro plays, it holds at this point until the condition holds, then goes on. The game is paused while you set it.</string>
+    <string name="macro_wait_timeout">Give up after (seconds)</string>
+    <string name="macro_wait_timeout_hint">Stops the macro if the condition has not held by then. Empty waits for ever.</string>
+    <plurals name="macro_waits">
+        <item quantity="one">%1$d wait</item>
+        <item quantity="other">%1$d waits</item>
+    </plurals>
     <plurals name="macro_inputs">
         <item quantity="one">%1$d input</item>
         <item quantity="other">%1$d inputs</item>

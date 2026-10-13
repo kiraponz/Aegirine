@@ -132,6 +132,8 @@ fun MacroStatus(
     onStop: () -> Unit,
     recording: Boolean,
     gameAspect: Float? = null,
+    /** While recording: puts a wait point at this moment. */
+    onWait: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -144,25 +146,40 @@ fun MacroStatus(
             WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding() + 8.dp
         }
         Box(Modifier.fillMaxWidth().padding(top = top), contentAlignment = Alignment.TopCenter) {
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .clickable(role = Role.Button, onClick = onStop)
-                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (recording) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF5252)))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .clickable(role = Role.Button, onClick = onStop)
+                        .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (recording) {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF5252)))
+                    }
+                    Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    Icon(
+                        painterResource(R.drawable.ic_stop),
+                        contentDescription = stringResource(if (recording) R.string.macro_stop_recording else R.string.macro_stop),
+                        tint = Color.White,
+                        modifier = Modifier.padding(6.dp).size(20.dp),
+                    )
                 }
-                Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                Icon(
-                    painterResource(R.drawable.ic_stop),
-                    contentDescription = stringResource(if (recording) R.string.macro_stop_recording else R.string.macro_stop),
-                    tint = Color.White,
-                    modifier = Modifier.padding(6.dp).size(20.dp),
-                )
+                if (onWait != null) {
+                    Text(
+                        stringResource(R.string.macro_wait_here),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .clickable(role = Role.Button, onClick = onWait)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
             }
         }
     }
@@ -244,11 +261,11 @@ fun MacrosMenu(
 
     editing?.let { (macro, start) ->
         ConditionDialog(
-            start = start,
+            kind = if (start) ConditionKind.Start else ConditionKind.Stop,
             current = if (start) macro.startWhen else macro.stopWhen,
             suggestions = suggestions,
             onDismiss = { editing = null },
-            onSave = { condition ->
+            onSave = { condition, _ ->
                 editing = null
                 if (start) actions.setStartCondition(macro, condition) else actions.setStopCondition(macro, condition)
             },
@@ -338,6 +355,7 @@ private fun Macro.details(): String {
     if (loop) parts += stringResource(R.string.macro_loop)
     startWhen?.let { parts += stringResource(R.string.macro_start_summary, it.describe()) }
     stopWhen?.let { parts += stringResource(R.string.macro_stop_summary, it.describe()) }
+    if (waits.isNotEmpty()) parts += pluralStringResource(R.plurals.macro_waits, waits.size, waits.size)
     return parts.joinToString(" · ")
 }
 
@@ -356,13 +374,15 @@ private const val FRAMES_PER_SECOND = 60
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConditionDialog(
-    start: Boolean,
+fun ConditionDialog(
+    kind: ConditionKind,
     current: MemoryCondition?,
     suggestions: List<Pair<Int, Int>>,
     onDismiss: () -> Unit,
-    onSave: (MemoryCondition?) -> Unit,
+    /** The condition (null clears it) and, for a wait point, the timeout in seconds (null: wait for ever). */
+    onSave: (MemoryCondition?, Long?) -> Unit,
 ) {
+    var timeout by remember { mutableStateOf("") }
     var address by remember { mutableStateOf(current?.let { "%08X".format(it.address) }.orEmpty()) }
     var size by remember { mutableStateOf(current?.size ?: 4) }
     var op by remember { mutableStateOf(current?.op ?: Comparison.Equal) }
@@ -371,11 +391,27 @@ private fun ConditionDialog(
         ?.let { a -> value.toLongOrNull()?.takeIf { it >= 0 }?.let { MemoryCondition(a, size, op, it) } }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (start) R.string.macro_start_condition else R.string.macro_stop_condition)) },
+        title = {
+            Text(
+                stringResource(
+                    when (kind) {
+                        ConditionKind.Start -> R.string.macro_start_condition
+                        ConditionKind.Stop -> R.string.macro_stop_condition
+                        ConditionKind.Wait -> R.string.macro_wait_title
+                    },
+                ),
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    stringResource(if (start) R.string.macro_start_hint else R.string.macro_stop_hint),
+                    stringResource(
+                        when (kind) {
+                            ConditionKind.Start -> R.string.macro_start_hint
+                            ConditionKind.Stop -> R.string.macro_stop_hint
+                            ConditionKind.Wait -> R.string.macro_wait_hint
+                        },
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -419,23 +455,40 @@ private fun ConditionDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (kind == ConditionKind.Wait) {
+                    OutlinedTextField(
+                        timeout,
+                        { timeout = it.filter(Char::isDigit).take(5) },
+                        label = { Text(stringResource(R.string.macro_wait_timeout)) },
+                        supportingText = { Text(stringResource(R.string.macro_wait_timeout_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(enabled = parsed != null, onClick = { onSave(parsed) }) {
+            TextButton(enabled = parsed != null, onClick = { onSave(parsed, timeout.toLongOrNull()) }) {
                 Text(stringResource(R.string.macro_condition_save))
             }
         },
         dismissButton = {
             Row {
                 if (current != null) {
-                    TextButton(onClick = { onSave(null) }) { Text(stringResource(R.string.macro_condition_clear)) }
+                    TextButton(onClick = { onSave(null, null) }) { Text(stringResource(R.string.macro_condition_clear)) }
                 }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
             }
         },
     )
 }
+
+/** What a [ConditionDialog] sets. */
+enum class ConditionKind { Start, Stop, Wait }
+
+/** Frames in a second of game time, for turning a timeout in seconds into frames. */
+fun secondsToFrames(seconds: Long): Long = seconds * FRAMES_PER_SECOND
 
 private const val MAIN_RAM = 32 * 1024 * 1024
 private const val MAX_SUGGESTIONS = 6

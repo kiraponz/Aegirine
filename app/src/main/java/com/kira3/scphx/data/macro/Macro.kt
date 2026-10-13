@@ -39,6 +39,20 @@ data class Macro(
     val startWhen: MemoryCondition? = null,
     /** Ends the macro (and its loop) as soon as this holds. */
     val stopWhen: MemoryCondition? = null,
+    /** Points where playback holds until the game's memory says so, in order of [MacroWait.t]. */
+    val waits: List<MacroWait> = emptyList(),
+)
+
+/**
+ * A pause in a macro at frame [t]: what was recorded before it plays, then playback holds (the
+ * clock stands still) until [condition] holds. If [timeout] frames pass first, the macro stops.
+ * No [timeout] waits for ever.
+ */
+@Serializable
+data class MacroWait(
+    val t: Long,
+    val condition: MemoryCondition,
+    val timeout: Long? = null,
 )
 
 /** Nominal frames per second, to convert the milliseconds of older macros. */

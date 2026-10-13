@@ -2,6 +2,8 @@ package com.kira3.scphx.emulation.macro
 
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.data.macro.MacroEvent
+import com.kira3.scphx.data.macro.MacroWait
+import com.kira3.scphx.data.macro.MemoryCondition
 import com.kira3.scphx.emucore.EmulatorCore
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
@@ -13,6 +15,7 @@ import kotlin.math.roundToInt
  */
 class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
     private val events = ArrayList<MacroEvent>()
+    private val waits = ArrayList<MacroWait>()
     private var firstAt = 0L
     private var lastFrame = 0L
     private var frame = 0L
@@ -47,6 +50,7 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
     fun start() {
         synchronized(events) {
             events.clear()
+            waits.clear()
             down.clear()
             moved.clear()
             firstAt = 0L
@@ -55,6 +59,11 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
         }
         running = true
         core.padListener = listener
+    }
+
+    /** Puts a wait point at the current time: playback will hold here until [condition] holds (or [timeout] frames pass). */
+    fun addWait(condition: MemoryCondition, timeout: Long?) {
+        synchronized(events) { waits += MacroWait(elapsed(), condition, timeout) }
     }
 
     /**
@@ -67,10 +76,10 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
         core.padListener = null
         synchronized(events) {
             if (events.isEmpty()) return null
-            val end = maxOf(events.last().t, elapsed() - TAIL_FRAMES)
+            val end = maxOf(events.last().t, waits.lastOrNull()?.t ?: 0L, elapsed() - TAIL_FRAMES)
             for (button in down.keys) events += MacroEvent(t = end, button = button.name, pressed = false)
             for (stick in moved) events += MacroEvent(t = end, stick = stick.name)
-            return Macro(id, name, end, events.toList(), frames = true)
+            return Macro(id, name, end, events.toList(), frames = true, waits = waits.toList())
         }
     }
 
