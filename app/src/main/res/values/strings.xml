@@ -41,6 +41,7 @@
 
     <!-- Emulation -->
     <string name="emulation_boot_failed">Could not start the game: %1$s</string>
+    <string name="emulation_driver_not_loaded">%1$s could not be loaded (%2$s). Using the system driver.</string>
     <string name="emulation_driver_failed">The game could not start with %1$s. Trying the system driver.</string>
     <string name="emulation_game_unreadable">Can\'t open the game. Check the game folder in the library.</string>
     <string name="emulation_bios_missing">Select a BIOS first</string>

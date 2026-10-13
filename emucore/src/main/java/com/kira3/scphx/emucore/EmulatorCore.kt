@@ -460,6 +460,9 @@ class EmulatorCore(context: Context) {
     /** Frames the game has run (the core's own count). A load state sets it back. */
     val frameCount: Long get() = NativeApp.getFrameCount()
 
+    /** Why the custom driver set by [useVulkanDriver] did not open, once the VM is up; null if it did or none was set. */
+    val customDriverFailure: String? get() = NativeApp.getCustomVulkanDriverFailure().ifEmpty { null }
+
     /** The unsigned little-endian number of [size] (1, 2 or 4) bytes at [address], or null if it cannot be read. */
     fun readValue(address: Int, size: Int): Long? {
         val bytes = readMemory(address, size) ?: return null

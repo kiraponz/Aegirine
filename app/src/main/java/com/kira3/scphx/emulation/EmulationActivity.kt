@@ -479,6 +479,15 @@ class EmulationActivity : ComponentActivity() {
             val error = core.runVm(gameUri.toString())
             runOnUiThread { onVmStopped(gameUri, error) }
         }
+        customDriverInUse?.let { driver ->
+            lifecycleScope.launch {
+                while (!core.hasActiveVm && emulationThread != null) delay(VM_POLL_MS)
+                // The Vulkan library falls back to the system loader without saying so.
+                val failure = core.customDriverFailure ?: return@launch
+                Log.w(TAG, "Driver ${driver.id} did not open: $failure")
+                Toast.makeText(this@EmulationActivity, getString(R.string.emulation_driver_not_loaded, driver.name, failure), Toast.LENGTH_LONG).show()
+            }
+        }
         suspended?.let { file ->
             // Used once the VM is up: it has loaded the state by then. Kept until then so a
             // driver fallback can boot into it again.

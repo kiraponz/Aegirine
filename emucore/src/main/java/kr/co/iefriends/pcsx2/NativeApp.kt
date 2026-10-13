@@ -107,6 +107,8 @@ internal object NativeApp {
      * every argument is "". A pack that fails to open falls back to the system driver.
      */
     @JvmStatic external fun setCustomVulkanDriver(driverDir: String, driverName: String, redirectDir: String, hookLibDir: String)
+    /** Why the custom driver did not open (the system driver is running instead); empty if it did or none was set. Patch 0009. */
+    @JvmStatic external fun getCustomVulkanDriverFailure(): String
 
     // ---- Surface ----
 
