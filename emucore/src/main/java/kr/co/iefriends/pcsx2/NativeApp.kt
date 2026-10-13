@@ -155,6 +155,7 @@ internal object NativeApp {
     @JvmStatic external fun getRegionForSerial(serial: String): String
     @JvmStatic external fun getCompatibilityForSerial(serial: String): Int
     @JvmStatic external fun getFPS(): Float
+    @JvmStatic external fun getFrameCount(): Long
 
     // ---- Save states ----
 

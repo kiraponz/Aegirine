@@ -1,11 +1,9 @@
 package com.kira3.scphx.emulation.macro
 
-import android.os.SystemClock
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.emucore.EmulatorCore
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
-import com.kira3.scphx.emucore.VmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -16,8 +14,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Plays a [Macro] into the pad of [port]. The clock only runs while the game does, so opening the
- * menu pauses the macro with the game. Only one plays at a time; playing another replaces it.
+ * Plays a [Macro] into the pad of [port]. Time is counted in emulated frames, so the macro keeps pace with
+ * the game: opening the menu pauses it, and fast-forwarding speeds it up. Only one plays at a time; playing another replaces it.
  */
 class MacroPlayer(private val core: EmulatorCore, private val port: Int, private val scope: CoroutineScope) {
     private val _playing = MutableStateFlow<Macro?>(null)
@@ -55,11 +53,12 @@ class MacroPlayer(private val core: EmulatorCore, private val port: Int, private
     private suspend fun runOnce(macro: Macro) {
         var next = 0
         var played = 0L
-        var last = SystemClock.elapsedRealtime()
-        while (next < macro.events.size || played < macro.durationMs) {
+        var last = core.frameCount
+        while (next < macro.events.size || played < macro.length) {
             delay(TICK_MS)
-            val now = SystemClock.elapsedRealtime()
-            if (core.vmState.value == VmState.Running) played += now - last
+            val now = core.frameCount
+            // A load state sends the counter back; that adds nothing.
+            if (now > last) played += now - last
             last = now
             while (next < macro.events.size && macro.events[next].t <= played) {
                 send(macro.events[next++])
@@ -88,6 +87,6 @@ class MacroPlayer(private val core: EmulatorCore, private val port: Int, private
     }
 
     private companion object {
-        const val TICK_MS = 4L
+        const val TICK_MS = 2L
     }
 }

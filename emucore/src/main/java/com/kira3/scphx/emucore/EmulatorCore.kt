@@ -457,6 +457,9 @@ class EmulatorCore(context: Context) {
 
     val fps: Float get() = NativeApp.getFPS()
 
+    /** Frames the game has run (the core's own count). A load state sets it back. */
+    val frameCount: Long get() = NativeApp.getFrameCount()
+
     /** "00000000" until the game's ELF is running. */
     val gameCrc: String get() = runCatching { NativeApp.getGameCRC() }.getOrDefault("00000000")
 

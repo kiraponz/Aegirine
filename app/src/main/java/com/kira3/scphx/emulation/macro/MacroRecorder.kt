@@ -1,6 +1,5 @@
 package com.kira3.scphx.emulation.macro
 
-import android.os.SystemClock
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.data.macro.MacroEvent
 import com.kira3.scphx.emucore.EmulatorCore
@@ -10,11 +9,13 @@ import kotlin.math.roundToInt
 
 /**
  * Records what is sent to the pad of [port] while it runs, from the touch pad and a controller
- * alike. Time starts at the first input, so the wait before it is not kept.
+ * alike. Time starts at the first input, so the wait before it is not kept. Time is counted in emulated frames.
  */
 class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
     private val events = ArrayList<MacroEvent>()
     private var firstAt = 0L
+    private var lastFrame = 0L
+    private var frame = 0L
     private val down = HashMap<PadButton, Float>()
     private val moved = HashSet<PadStick>()
     private var running = false
@@ -49,6 +50,8 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
             down.clear()
             moved.clear()
             firstAt = 0L
+            lastFrame = core.frameCount
+            frame = 0L
         }
         running = true
         core.padListener = listener
@@ -56,7 +59,7 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
 
     /**
      * Stops recording and returns the macro, or null if nothing was pressed. Whatever is still held
-     * is let go at the end, and the last [TAIL_MS] (the time spent reaching the stop button) are dropped.
+     * is let go at the end, and the last [TAIL_FRAMES] (the time spent reaching the stop button) are dropped.
      */
     fun stop(id: String, name: String): Macro? {
         if (!running) return null
@@ -64,10 +67,10 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
         core.padListener = null
         synchronized(events) {
             if (events.isEmpty()) return null
-            val end = maxOf(events.last().t, elapsed() - TAIL_MS)
+            val end = maxOf(events.last().t, elapsed() - TAIL_FRAMES)
             for (button in down.keys) events += MacroEvent(t = end, button = button.name, pressed = false)
             for (stick in moved) events += MacroEvent(t = end, stick = stick.name)
-            return Macro(id, name, end, events.toList())
+            return Macro(id, name, end, events.toList(), frames = true)
         }
     }
 
@@ -77,16 +80,24 @@ class MacroRecorder(private val core: EmulatorCore, private val port: Int) {
     }
 
     private fun add(event: MacroEvent) {
-        if (events.isEmpty()) firstAt = SystemClock.elapsedRealtime()
+        if (events.isEmpty()) firstAt = tick()
         events += event.copy(t = elapsed())
     }
 
-    /** Milliseconds since the first input (0 before it). */
-    private fun elapsed(): Long = if (events.isEmpty()) 0L else SystemClock.elapsedRealtime() - firstAt
+    /** Frames since the first input (0 before it). */
+    private fun elapsed(): Long = if (events.isEmpty()) 0L else tick() - firstAt
+
+    /** The frames run since [start]. A load state sends the counter back; that adds nothing. */
+    private fun tick(): Long {
+        val now = core.frameCount
+        if (now > lastFrame) frame += now - lastFrame
+        lastFrame = now
+        return frame
+    }
 
     private fun round(v: Float) = (v * 1000).roundToInt() / 1000f
 
     private companion object {
-        const val TAIL_MS = 400L
+        const val TAIL_FRAMES = 24L
     }
 }

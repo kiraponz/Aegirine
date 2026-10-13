@@ -3,6 +3,7 @@ package com.kira3.scphx.data
 import android.content.Context
 import android.util.Log
 import com.kira3.scphx.data.macro.Macro
+import com.kira3.scphx.data.macro.inFrames
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,7 @@ class MacroRepository(context: Context) {
         val file = fileFor(serial)
         if (!file.isFile) return@withContext emptyList()
         runCatching { json.decodeFromString(serializer, file.readText()) }
+            .map { list -> list.map { it.inFrames() } }
             .onFailure { Log.w(TAG, "Could not read ${file.name}", it) }
             .getOrDefault(emptyList())
     }

@@ -261,7 +261,7 @@ private fun MacroMenu(macro: Macro, actions: MacroActions, onRename: () -> Unit,
 @Composable
 private fun Macro.details(): String {
     val inputs = pluralStringResource(R.plurals.macro_inputs, events.size, events.size)
-    val parts = mutableListOf(inputs, durationLabel(durationMs))
+    val parts = mutableListOf(inputs, durationLabel(length * 1000 / FRAMES_PER_SECOND))
     if (loop) parts += stringResource(R.string.macro_loop)
     return parts.joinToString(" · ")
 }
@@ -271,3 +271,6 @@ fun durationLabel(ms: Long): String {
     val seconds = (ms + 500) / 1000
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
+
+/** Frames in a second of game time, for showing a macro's length. */
+private const val FRAMES_PER_SECOND = 60
