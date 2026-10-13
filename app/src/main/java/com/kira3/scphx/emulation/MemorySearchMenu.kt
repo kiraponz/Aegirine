@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -66,7 +69,9 @@ fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Uni
     val text = search.valueText
     val mode = search.mode
     val value = text.trim().toLongOrNull()?.takeIf { it >= 0 }
-    var editing by remember { mutableStateOf<MemorySearch.Hit?>(null) }
+    var editing by remember { mutableStateOf<List<MemorySearch.Hit>?>(null) }
+    var selected by remember { mutableStateOf(emptySet<Int>()) }
+    val chosen = state.hits.filter { it.address in selected }
 
     // Live values of the listed addresses, while the panel is up (they move once the game runs).
     LaunchedEffect(state.hits.size) {
@@ -179,17 +184,44 @@ fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Uni
                         style = MaterialTheme.typography.titleSmall,
                     )
                 }
+                if (editable && state.hits.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                selected = if (chosen.size == state.hits.size) emptySet() else state.hits.map { it.address }.toSet()
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(if (chosen.size == state.hits.size) R.string.search_select_none else R.string.search_select_all))
+                        }
+                        Button(
+                            onClick = { editing = chosen },
+                            enabled = chosen.isNotEmpty(),
+                            modifier = Modifier.weight(1f),
+                        ) { Text(stringResource(R.string.search_change_selected, chosen.size)) }
+                    }
+                }
                 for (hit in state.hits) {
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .combinedClickable(
-                                onClick = { if (editable) editing = hit else copyAddress(context, hit.address) },
+                                onClick = {
+                                    if (editable) {
+                                        selected = if (hit.address in selected) selected - hit.address else selected + hit.address
+                                    } else {
+                                        copyAddress(context, hit.address)
+                                    }
+                                },
                                 onLongClick = { copyAddress(context, hit.address) },
                             )
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        if (editable) {
+                            Checkbox(checked = hit.address in selected, onCheckedChange = null)
+                            Spacer(Modifier.width(16.dp))
+                        }
                         Text(
                             "%08X".format(hit.address),
                             fontFamily = FontFamily.Monospace,
@@ -213,18 +245,22 @@ fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Uni
 
 /** Asks for a new value for [hit] and writes it. */
 @Composable
-private fun EditValueDialog(search: MemorySearch, hit: MemorySearch.Hit, onDismiss: () -> Unit) {
+private fun EditValueDialog(search: MemorySearch, hits: List<MemorySearch.Hit>, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val max = (1L shl (8 * search.state.size)) - 1
-    var text by remember { mutableStateOf(hit.value.toString()) }
+    // Start from the value they share, if they do.
+    var text by remember { mutableStateOf(hits.map { it.value }.distinct().singleOrNull()?.toString().orEmpty()) }
     val value = text.toLongOrNull()?.takeIf { it in 0..max }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.search_edit_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("%08X".format(hit.address), fontFamily = FontFamily.Monospace)
+                Text(
+                    if (hits.size == 1) "%08X".format(hits[0].address) else stringResource(R.string.search_edit_many, hits.size),
+                    fontFamily = FontFamily.Monospace,
+                )
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it.filter(Char::isDigit).take(10) },
@@ -241,7 +277,7 @@ private fun EditValueDialog(search: MemorySearch, hit: MemorySearch.Hit, onDismi
                 enabled = value != null,
                 onClick = {
                     scope.launch {
-                        if (!search.write(hit.address, value!!)) {
+                        if (!search.write(hits.map { it.address }, value!!)) {
                             Toast.makeText(context, R.string.search_edit_failed, Toast.LENGTH_SHORT).show()
                         }
                         onDismiss()

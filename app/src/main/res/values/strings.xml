@@ -649,7 +649,11 @@
     <string name="search_count">%1$d match(es)</string>
     <string name="search_tap_to_copy">Tap an address to copy it.</string>
     <string name="search_copied">Copied %1$s</string>
-    <string name="search_tap_to_edit">Tap a row to change its value, or long-press to copy the address.</string>
+    <string name="search_tap_to_edit">Tick rows to change their values together, or long-press a row to copy its address.</string>
+    <string name="search_select_all">Select all</string>
+    <string name="search_select_none">Clear selection</string>
+    <string name="search_change_selected">Change (%1$d)</string>
+    <string name="search_edit_many">%1$d addresses</string>
     <string name="search_edit_title">Change value</string>
     <string name="search_edit_value">New value (0 to %1$s)</string>
     <string name="search_edit_write">Write</string>

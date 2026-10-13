@@ -136,12 +136,12 @@ class MemorySearch(private val core: EmulatorCore) {
         if (state.hits.map { it.address } == updated.map { it.address }) state = state.copy(hits = updated)
     }
 
-    /** Writes [value] at the listed [address] and shows it. False if the memory could not be written. */
-    suspend fun write(address: Int, value: Long): Boolean {
+    /** Writes [value] at each of the listed [targets] and shows it. False if any could not be written. */
+    suspend fun write(targets: Collection<Int>, value: Long): Boolean {
         val size = state.size
-        val ok = withContext(Dispatchers.IO) { core.writeValue(address, size, value) }
-        if (ok) state = state.copy(hits = state.hits.map { if (it.address == address) it.copy(value = value) else it })
-        return ok
+        val done = withContext(Dispatchers.IO) { targets.filter { core.writeValue(it, size, value) }.toSet() }
+        state = state.copy(hits = state.hits.map { if (it.address in done) it.copy(value = value) else it })
+        return done.size == targets.size
     }
 
     private fun keep(found: Collector) {
