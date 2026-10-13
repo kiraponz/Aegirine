@@ -59,6 +59,8 @@ import com.kira3.scphx.emulation.macro.MacroRecorder
 import com.kira3.scphx.emulation.search.MemorySearch
 import com.kira3.scphx.data.macro.Macro
 import com.kira3.scphx.data.macro.MemoryCondition
+import com.kira3.scphx.data.GeminiChat
+import com.kira3.scphx.data.GeminiMessage
 import com.kira3.scphx.data.memo.Memo
 import com.kira3.scphx.emulation.input.PadEditor
 import com.kira3.scphx.emulation.input.TouchPad
@@ -186,10 +188,17 @@ class EmulationActivity : ComponentActivity() {
     // ---- Gemini ----
     private var aiShot by mutableStateOf<AiShot?>(null)
     private var aiState by mutableStateOf<AiState>(AiState.Idle)
+    private var aiMessages by mutableStateOf<List<GeminiMessage>>(emptyList())
+    private var aiChatId = UUID.randomUUID().toString()
+    /** False for a conversation opened from the history: its screenshot is gone. */
+    private var aiHasImage by mutableStateOf(true)
+    private var aiHistory by mutableStateOf<List<GeminiChat>>(emptyList())
+    /** The memo being written or changed by hand; [NewMemo] for a new one. */
+    private var memoEdit by mutableStateOf<Memo?>(null)
     private var aiBusy = false
     private var aiJob: Job? = null
 
-    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || searchOpen || waitDialogOpen || aiShot != null
+    private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || searchOpen || waitDialogOpen || memoEdit != null || aiShot != null
 
     /** Waits for the game's CRC, then gives the core its cheats. */
     private var cheatsJob: Job? = null
@@ -363,7 +372,18 @@ class EmulationActivity : ComponentActivity() {
                         )
                     }
                     padEditor?.let { PadEditorBar(it, serial != null, ::closePadEditor) { closePadEditor(null) } }
-                    AiPanelHost(aiShot, aiState, ::askGemini, if (serial != null) ::saveMemo else null, ::closeAi)
+                    val panelShot = aiShot
+                    AiPanelHost(
+                        panelShot?.let { AiPanelData(it, aiHasImage, aiMessages, aiState, aiHistory, serial != null) },
+                        aiPanelActions,
+                    )
+                    memoEdit?.let { target ->
+                        MemoDialog(
+                            initial = target.takeIf { it !== NewMemo },
+                            onSave = { title, text -> saveMemoEdit(target, title, text) },
+                            onDismiss = ::closeMemoEditor,
+                        )
+                    }
                     if (menuOpen && current != null) {
                         InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
                     }
@@ -384,6 +404,7 @@ class EmulationActivity : ComponentActivity() {
         serial?.let { serial ->
             lifecycleScope.launch { container.macroRepository.macros(serial).collect { macroList = it } }
             lifecycleScope.launch { container.memoRepository.memos(serial).collect { memoList = it } }
+            lifecycleScope.launch { container.geminiHistoryRepository.chats(serial).collect { aiHistory = it } }
         }
         if (!editPadOnly) lifecycleScope.launch { boot(gameUri) }
     }
@@ -771,6 +792,7 @@ class EmulationActivity : ComponentActivity() {
                 pausedByMenu = true
             }
             aiState = AiState.Idle
+            newChat()
             aiShot = shot
         }
     }
@@ -779,6 +801,7 @@ class EmulationActivity : ComponentActivity() {
         aiJob?.cancel()
         aiShot = null
         aiState = AiState.Idle
+        aiMessages = emptyList()
         if (pausedByMenu) {
             pausedByMenu = false
             core.resume()
@@ -788,14 +811,27 @@ class EmulationActivity : ComponentActivity() {
     private fun askGemini(question: String) {
         val shot = aiShot ?: return
         val gemini = settings?.gemini ?: return
+        val asked = aiMessages + GeminiMessage(GeminiMessage.USER, question)
+        val chatId = aiChatId
         aiState = AiState.Loading
         aiJob?.cancel()
         aiJob = lifecycleScope.launch {
-            val result = GeminiApi.ask(container.geminiKeyStore.get(), gemini.model, gemini.systemPrompt, shot.jpeg, question)
-            aiState = result.fold(
-                onSuccess = { AiState.Answer(it) },
+            val result = GeminiApi.ask(
+                container.geminiKeyStore.get(), gemini.model, gemini.systemPrompt,
+                shot.jpeg.takeIf { aiHasImage }, asked,
+            )
+            result.fold(
+                onSuccess = { answer ->
+                    // A question and its answer join the conversation together: a failed one leaves the box as it was.
+                    val messages = asked + GeminiMessage(GeminiMessage.MODEL, answer)
+                    if (chatId == aiChatId) {
+                        aiMessages = messages
+                        aiState = AiState.Idle
+                    }
+                    serial?.let { container.geminiHistoryRepository.save(it, GeminiChat(chatId, System.currentTimeMillis(), messages)) }
+                },
                 onFailure = {
-                    AiState.Error(
+                    aiState = AiState.Error(
                         when (it) {
                             is GeminiError.NoKey -> getString(R.string.ai_no_key)
                             is GeminiError.Rejected -> getString(R.string.ai_error_rejected, it.message.orEmpty())
@@ -806,6 +842,73 @@ class EmulationActivity : ComponentActivity() {
                 },
             )
         }
+    }
+
+    /** Starts a conversation about the screenshot in the panel. */
+    private fun newChat() {
+        aiJob?.cancel()
+        aiChatId = UUID.randomUUID().toString()
+        aiMessages = emptyList()
+        aiHasImage = true
+        aiState = AiState.Idle
+    }
+
+    private val aiPanelActions = object : AiPanelActions {
+        override fun ask(question: String) = askGemini(question)
+        override fun saveMemo(question: String, answer: String) = this@EmulationActivity.saveMemo(question, answer)
+
+        override fun openChat(chat: GeminiChat) {
+            aiJob?.cancel()
+            aiChatId = chat.id
+            aiMessages = chat.messages
+            aiHasImage = false
+            aiState = AiState.Idle
+        }
+
+        override fun deleteChat(chat: GeminiChat) {
+            val serial = serial ?: return
+            lifecycleScope.launch { container.geminiHistoryRepository.delete(serial, chat.id) }
+        }
+
+        override fun newChat() = this@EmulationActivity.newChat()
+        override fun close() = closeAi()
+    }
+
+    /** Opens the memo dialog over a paused game, to write [memo] (null: a new one) by hand. */
+    private fun openMemoEditor(memo: Memo?) {
+        if (serial == null || memoEdit != null) return
+        gamepad.releaseAll()
+        if (core.vmState.value == VmState.Running && !pausedByMenu) {
+            core.pause()
+            pausedByMenu = true
+        }
+        memoEdit = memo ?: NewMemo
+    }
+
+    private fun closeMemoEditor() {
+        memoEdit = null
+        if (pausedByMenu) {
+            pausedByMenu = false
+            core.resume()
+        }
+    }
+
+    private fun saveMemoEdit(target: Memo, title: String, text: String) {
+        if (target === NewMemo) {
+            saveMemo(title, text)
+            // A memo that cannot be seen would look like nothing happened.
+            if (settings?.gemini?.memosVisible == false) {
+                updateSetting("gemini.memosVisible") { it.copy(gemini = it.gemini.copy(memosVisible = true)) }
+            }
+        } else {
+            val serial = serial ?: return
+            lifecycleScope.launch {
+                container.memoRepository.update(serial) { list ->
+                    list.map { if (it.id == target.id) it.copy(question = title, text = text) else it }
+                }
+            }
+        }
+        closeMemoEditor()
     }
 
     /** Keeps an answer as a memo, a little lower than the last one so they do not pile up. */
@@ -829,6 +932,8 @@ class EmulationActivity : ComponentActivity() {
     private val memoActions = object : MemoActions {
         override fun move(memo: Memo, x: Float, y: Float) = change(memo) { it.copy(x = x, y = y) }
         override fun setCollapsed(memo: Memo, collapsed: Boolean) = change(memo) { it.copy(collapsed = collapsed) }
+        override fun edit(memo: Memo) = openMemoEditor(memo)
+
         override fun delete(memo: Memo) {
             val serial = serial ?: return
             lifecycleScope.launch { container.memoRepository.update(serial) { list -> list.filter { it.id != memo.id } } }
@@ -1070,6 +1175,12 @@ class EmulationActivity : ComponentActivity() {
             // The game stays paused (by the menu) while the macros are up.
             menuOpen = false
             showMacros()
+        }
+
+        override fun addMemo() {
+            // The game stays paused (by the menu) while the memo is written.
+            menuOpen = false
+            openMemoEditor(null)
         }
 
         override fun setShowMemos(show: Boolean) = updateSetting("gemini.memosVisible") {
@@ -1392,6 +1503,9 @@ class EmulationActivity : ComponentActivity() {
 
         /** Memos saved one after the other are offset in this many steps before starting over. */
         private const val MEMO_CASCADE = 6
+
+        /** Stands for "a memo not written yet" in [memoEdit]. */
+        private val NewMemo = Memo("", "", "", 0f, 0f)
         private const val SUSPEND_SAVE_TRIES = 10
         private const val SUSPEND_SAVE_RETRY_MS = 250L
         private const val TOAST_VISIBLE_MS = 3_500L

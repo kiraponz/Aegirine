@@ -63,41 +63,47 @@ object GeminiApi {
         }
 
     /**
-     * Asks [model] about [image] (a JPEG) and returns its answer as text. [systemPrompt] is sent as the
-     * system instruction when it is not blank.
+     * Continues the conversation [messages] (which ends with the user's question) and returns the
+     * answer as text. [image] (a JPEG), if any, goes with the first message: the API keeps no
+     * state, so each call sends the whole conversation. [systemPrompt] is sent as the system
+     * instruction when it is not blank.
      */
-    suspend fun ask(apiKey: String, model: String, systemPrompt: String, image: ByteArray, question: String): Result<String> =
+    suspend fun ask(apiKey: String, model: String, systemPrompt: String, image: ByteArray?, messages: List<GeminiMessage>): Result<String> =
         withContext(Dispatchers.IO) {
             if (apiKey.isBlank()) return@withContext Result.failure(GeminiError.NoKey())
             runCatching {
-                val body = requestBody(systemPrompt, image, question)
+                val body = requestBody(systemPrompt, image, messages)
                 parseAnswer(json.parseToJsonElement(request("$BASE/models/$model:generateContent", apiKey, body)).jsonObject)
             }.recoverCatching { throw if (it is GeminiError) it else GeminiError.Network(it) }
         }
 
-    internal fun requestBody(systemPrompt: String, image: ByteArray, question: String): String = buildJsonObject {
+    internal fun requestBody(systemPrompt: String, image: ByteArray?, messages: List<GeminiMessage>): String = buildJsonObject {
         if (systemPrompt.isNotBlank()) {
             putJsonObject("systemInstruction") {
                 putJsonArray("parts") { add(buildJsonObject { put("text", systemPrompt) }) }
             }
         }
         putJsonArray("contents") {
-            add(
-                buildJsonObject {
-                    put("role", "user")
-                    putJsonArray("parts") {
-                        add(
-                            buildJsonObject {
-                                putJsonObject("inlineData") {
-                                    put("mimeType", "image/jpeg")
-                                    put("data", java.util.Base64.getEncoder().encodeToString(image))
-                                }
-                            },
-                        )
-                        add(buildJsonObject { put("text", question) })
-                    }
-                },
-            )
+            messages.forEachIndexed { index, message ->
+                add(
+                    buildJsonObject {
+                        put("role", message.role)
+                        putJsonArray("parts") {
+                            if (index == 0 && image != null) {
+                                add(
+                                    buildJsonObject {
+                                        putJsonObject("inlineData") {
+                                            put("mimeType", "image/jpeg")
+                                            put("data", java.util.Base64.getEncoder().encodeToString(image))
+                                        }
+                                    },
+                                )
+                            }
+                            add(buildJsonObject { put("text", message.text) })
+                        }
+                    },
+                )
+            }
         }
     }.toString()
 

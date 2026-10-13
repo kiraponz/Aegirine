@@ -78,6 +78,7 @@ interface InGameMenuActions {
     fun hideTouchPad()
     fun setMacroButton(show: Boolean)
     fun setShowMemos(show: Boolean)
+    fun addMemo()
     fun setShowFps(show: Boolean)
     fun setFastForwardButton(show: Boolean)
     fun setScreenshotButton(show: Boolean)
@@ -199,6 +200,7 @@ fun InGameMenu(
                         !busy,
                         actions::setShowMemos,
                     )
+                    MenuAction(stringResource(R.string.menu_add_memo), !busy, actions::addMemo)
                 }
                 FastForwardSpeed(settings.frameLimit.fastForwardSpeed, !busy, actions::setFastForwardSpeed)
             }

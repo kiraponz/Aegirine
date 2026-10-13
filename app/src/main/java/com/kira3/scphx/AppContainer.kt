@@ -3,6 +3,7 @@ package com.kira3.scphx
 import android.content.Context
 import com.kira3.scphx.data.AppPreferences
 import com.kira3.scphx.data.BackupRepository
+import com.kira3.scphx.data.GeminiHistoryRepository
 import com.kira3.scphx.data.SaveStateRepository
 import com.kira3.scphx.data.BiosRepository
 import com.kira3.scphx.data.CheatRepository
@@ -40,6 +41,7 @@ class AppContainer(context: Context) {
     val memoRepository: MemoRepository by lazy { MemoRepository(appContext) }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
     val geminiKeyStore: GeminiKeyStore by lazy { GeminiKeyStore(appContext) }
+    val geminiHistoryRepository: GeminiHistoryRepository by lazy { GeminiHistoryRepository(appContext) }
     val saveStateRepository: SaveStateRepository by lazy { SaveStateRepository(appContext, emulatorCore) }
     val backupRepository: BackupRepository by lazy {
         BackupRepository(appContext, emulatorCore, settingsRepository, gameRecordRepository, memoryCardRepository)

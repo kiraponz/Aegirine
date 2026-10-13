@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -15,12 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +52,7 @@ interface MemoActions {
     /** [x] and [y] are fractions of the screen. */
     fun move(memo: Memo, x: Float, y: Float)
     fun setCollapsed(memo: Memo, collapsed: Boolean)
+    fun edit(memo: Memo)
     fun delete(memo: Memo)
 }
 
@@ -120,6 +124,9 @@ private fun MemoCard(memo: Memo, areaWidth: Float, areaHeight: Float, actions: M
                         contentDescription = stringResource(if (memo.collapsed) R.string.memo_expand else R.string.memo_collapse),
                     )
                 }
+                IconButton(onClick = { actions.edit(memo) }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.memo_edit))
+                }
                 IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.memo_delete))
                 }
@@ -153,6 +160,42 @@ private fun MemoCard(memo: Memo, areaWidth: Float, areaHeight: Float, actions: M
             },
         )
     }
+}
+
+/** Writes a memo by hand, or changes [initial]: a title and the text. */
+@Composable
+fun MemoDialog(initial: Memo?, onSave: (title: String, text: String) -> Unit, onDismiss: () -> Unit) {
+    var title by remember { mutableStateOf(initial?.question.orEmpty()) }
+    var text by remember { mutableStateOf(initial?.text.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(if (initial == null) R.string.memo_add_title else R.string.memo_edit_title)) },
+        text = {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    title,
+                    { title = it },
+                    label = { Text(stringResource(R.string.memo_title_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    text,
+                    { text = it },
+                    label = { Text(stringResource(R.string.memo_text_label)) },
+                    minLines = 4,
+                    maxLines = 10,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = text.isNotBlank(), onClick = { onSave(title.trim(), text.trim()) }) {
+                Text(stringResource(R.string.macro_condition_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) } },
+    )
 }
 
 private val CARD_WIDTH = 240.dp

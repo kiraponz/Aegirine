@@ -797,6 +797,18 @@
     <string name="memo_expand">Expand</string>
     <string name="memo_collapse">Collapse</string>
     <string name="memo_delete">Delete</string>
+    <string name="memo_edit">Edit</string>
+    <string name="menu_add_memo">Add memo</string>
+    <string name="memo_add_title">Add memo</string>
+    <string name="memo_edit_title">Edit memo</string>
+    <string name="memo_title_label">Title (optional)</string>
+    <string name="memo_text_label">Memo</string>
+    <string name="ai_history">History</string>
+    <string name="ai_history_empty">No earlier conversations for this game.</string>
+    <string name="ai_new_chat">New</string>
+    <string name="ai_no_screenshot">The screenshot is not kept, so this continues as text only.</string>
+    <string name="ai_history_delete">Delete this conversation</string>
+    <string name="ai_back">Back</string>
     <string name="memo_delete_title">Delete this memo?</string>
 
     <!-- Backup and save states -->

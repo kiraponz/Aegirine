@@ -71,6 +71,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.kira3.scphx.R
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.runtime.mutableStateListOf
+import com.kira3.scphx.data.GeminiChat
+import com.kira3.scphx.data.GeminiMessage
 import java.io.ByteArrayOutputStream
 import java.io.File
 
@@ -116,12 +126,32 @@ private fun Modifier.rainbowAura(shape: Shape): Modifier = composed {
 /** A frame ready to send: [jpeg] for the API, [preview] for the panel. */
 class AiShot(val jpeg: ByteArray, val preview: ImageBitmap)
 
-/** What the AI panel shows below the question. */
+/** Where the AI panel stands while a question is out. */
 sealed interface AiState {
     data object Idle : AiState
     data object Loading : AiState
-    data class Answer(val text: String) : AiState
     data class Error(val message: String) : AiState
+}
+
+/** What the AI panel shows. [hasImage] is false for a conversation picked from the history: its screenshot is gone. */
+class AiPanelData(
+    val shot: AiShot,
+    val hasImage: Boolean,
+    val messages: List<GeminiMessage>,
+    val state: AiState,
+    val history: List<GeminiChat>,
+    /** Memos and history are kept per game id; without one there is nowhere to put them. */
+    val canKeep: Boolean,
+)
+
+/** What the AI panel can ask for. */
+interface AiPanelActions {
+    fun ask(question: String)
+    fun saveMemo(question: String, answer: String)
+    fun openChat(chat: GeminiChat)
+    fun deleteChat(chat: GeminiChat)
+    fun newChat()
+    fun close()
 }
 
 /** Reads [png], shrinks it so the longer side is at most [MAX_SIDE] pixels, and compresses it to a JPEG. Null if it cannot be read. */
@@ -162,60 +192,55 @@ fun AiButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** The screen as it was when the button was pressed, a question box, and the answer once it arrives. The game stays paused. */
 /**
- * The panel for [shot] (null = closed). It fades in and floats up when opened, and floats back
+ * The panel for [data] (null = closed). It fades in and floats up when opened, and floats back
  * down while fading out when closed; during the fade-out it ignores touches.
  */
 @Composable
-fun AiPanelHost(
-    shot: AiShot?,
-    state: AiState,
-    onAsk: (String) -> Unit,
-    onSaveMemo: ((question: String, answer: String) -> Unit)?,
-    onClose: () -> Unit,
-) {
+fun AiPanelHost(data: AiPanelData?, actions: AiPanelActions) {
     val appear = remember { Animatable(0f) }
-    var last by remember { mutableStateOf<AiShot?>(null) }
-    var lastState by remember { mutableStateOf<AiState>(AiState.Idle) }
-    if (shot != null) {
-        last = shot
-        lastState = state
-    }
-    LaunchedEffect(shot != null) {
-        appear.animateTo(if (shot != null) 1f else 0f, tween(450, easing = FastOutSlowInEasing))
-        if (shot == null) last = null
+    var last by remember { mutableStateOf<AiPanelData?>(null) }
+    if (data != null) last = data
+    LaunchedEffect(data != null) {
+        appear.animateTo(if (data != null) 1f else 0f, tween(450, easing = FastOutSlowInEasing))
+        if (data == null) last = null
     }
     val showing = last ?: return
-    val open = shot != null
+    val open = data != null
     AiPanel(
-        showing, lastState,
-        onAsk = { if (open) onAsk(it) },
-        onSaveMemo = if (open) onSaveMemo else null,
-        onClose = { if (open) onClose() },
+        showing,
+        object : AiPanelActions {
+            override fun ask(question: String) { if (open) actions.ask(question) }
+            override fun saveMemo(question: String, answer: String) { if (open) actions.saveMemo(question, answer) }
+            override fun openChat(chat: GeminiChat) { if (open) actions.openChat(chat) }
+            override fun deleteChat(chat: GeminiChat) { if (open) actions.deleteChat(chat) }
+            override fun newChat() { if (open) actions.newChat() }
+            override fun close() { if (open) actions.close() }
+        },
         appear = appear.value,
     )
 }
 
 @Composable
-fun AiPanel(
-    shot: AiShot,
-    state: AiState,
-    onAsk: (String) -> Unit,
-    /** Null when there is nowhere to keep a memo (no game id). */
-    onSaveMemo: ((question: String, answer: String) -> Unit)?,
-    onClose: () -> Unit,
-    /** 0 (hidden) to 1 (fully shown); drives the fade and float. */
-    appear: Float,
-) {
-    var savedAnswer by rememberSaveable { mutableStateOf<String?>(null) }
+fun AiPanel(data: AiPanelData, actions: AiPanelActions, appear: Float) {
+    val state = data.state
+    val messages = data.messages
+    var showHistory by rememberSaveable { mutableStateOf(false) }
     var question by rememberSaveable { mutableStateOf("") }
+    val savedAnswers = remember { mutableStateListOf<String>() }
     val canSend = question.isNotBlank() && state != AiState.Loading
+    val scroll = rememberScrollState()
+    // A new answer is the news: show it, and empty the box for the next question.
+    LaunchedEffect(messages) {
+        question = ""
+        scroll.animateScrollTo(scroll.maxValue)
+    }
+    LaunchedEffect(state) { if (state != AiState.Idle) scroll.animateScrollTo(scroll.maxValue) }
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.6f * appear))
-            .clickable(interactionSource = null, indication = null, onClick = onClose)
+            .clickable(interactionSource = null, indication = null, onClick = actions::close)
             .safeDrawingPadding()
             .imePadding()
             .padding(16.dp),
@@ -243,77 +268,140 @@ fun AiPanel(
         ) {
             Column(Modifier.padding(vertical = 16.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         stringResource(R.string.ai_title),
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = onClose) { Text(stringResource(R.string.menu_resume)) }
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Image(
-                        shot.preview,
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(width = 112.dp, height = 84.dp).clip(MaterialTheme.shapes.small),
-                    )
-                    OutlinedTextField(
-                        value = question,
-                        onValueChange = { question = it },
-                        placeholder = { Text(stringResource(R.string.ai_question_hint)) },
-                        minLines = 2,
-                        maxLines = 4,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                FilledTonalButton(
-                    onClick = { onAsk(question.trim()) },
-                    enabled = canSend,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-                ) { Text(stringResource(R.string.ai_send)) }
-                when (state) {
-                    AiState.Idle -> Unit
-                    AiState.Loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                    if (showHistory) {
+                        TextButton(onClick = { showHistory = false }) { Text(stringResource(R.string.ai_back)) }
+                    } else {
+                        if (messages.isNotEmpty() || !data.hasImage) {
+                            TextButton(onClick = actions::newChat) { Text(stringResource(R.string.ai_new_chat)) }
+                        }
+                        if (data.canKeep) {
+                            TextButton(onClick = { showHistory = true }) { Text(stringResource(R.string.ai_history)) }
+                        }
                     }
-                    is AiState.Answer -> {
-                        SelectionContainer {
-                            Text(
-                                state.text,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier
-                                    .heightIn(max = 280.dp)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                    TextButton(onClick = actions::close) { Text(stringResource(R.string.menu_resume)) }
+                }
+                if (showHistory) {
+                    HistoryList(
+                        data.history,
+                        onOpen = { showHistory = false; actions.openChat(it) },
+                        onDelete = actions::deleteChat,
+                    )
+                } else {
+                    val hasConversation = messages.isNotEmpty() || state != AiState.Idle
+                    if (hasConversation) {
+                        Column(
+                            Modifier
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(scroll)
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            messages.forEachIndexed { index, message ->
+                                if (message.fromUser) {
+                                    Text(
+                                        message.text,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                } else {
+                                    SelectionContainer {
+                                        Text(message.text, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    if (data.canKeep) {
+                                        val asked = messages.getOrNull(index - 1)?.takeIf { it.fromUser }?.text.orEmpty()
+                                        val saved = message.text in savedAnswers
+                                        TextButton(
+                                            onClick = {
+                                                actions.saveMemo(asked, message.text)
+                                                savedAnswers += message.text
+                                            },
+                                            enabled = !saved,
+                                        ) { Text(stringResource(if (saved) R.string.ai_memo_saved else R.string.ai_save_memo)) }
+                                    }
+                                }
+                            }
+                            when (state) {
+                                AiState.Idle -> Unit
+                                AiState.Loading -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator()
+                                }
+                                is AiState.Error -> Text(
+                                    state.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        if (data.hasImage) {
+                            Image(
+                                data.shot.preview,
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(width = 112.dp, height = 84.dp).clip(MaterialTheme.shapes.small),
                             )
                         }
-                        if (onSaveMemo != null) {
-                            TextButton(
-                                onClick = {
-                                    onSaveMemo(question.trim(), state.text)
-                                    savedAnswer = state.text
-                                },
-                                enabled = savedAnswer != state.text,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            ) { Text(stringResource(if (savedAnswer == state.text) R.string.ai_memo_saved else R.string.ai_save_memo)) }
-                        }
+                        OutlinedTextField(
+                            value = question,
+                            onValueChange = { question = it },
+                            placeholder = { Text(stringResource(R.string.ai_question_hint)) },
+                            supportingText = if (data.hasImage) null else ({ Text(stringResource(R.string.ai_no_screenshot)) }),
+                            minLines = 2,
+                            maxLines = 4,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                            modifier = Modifier.weight(1f),
+                        )
                     }
-                    is AiState.Error -> Text(
-                        state.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                    )
+                    FilledTonalButton(
+                        onClick = { actions.ask(question.trim()) },
+                        enabled = canSend,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+                    ) { Text(stringResource(R.string.ai_send)) }
                 }
             }
+        }
+    }
+}
+
+/** The game's earlier conversations, newest first: tap to open, the bin to delete. */
+@Composable
+private fun HistoryList(history: List<GeminiChat>, onOpen: (GeminiChat) -> Unit, onDelete: (GeminiChat) -> Unit) {
+    if (history.isEmpty()) {
+        Text(
+            stringResource(R.string.ai_history_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+        )
+        return
+    }
+    val format = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT) }
+    LazyColumn(Modifier.heightIn(max = 400.dp)) {
+        items(history, key = { it.id }) { chat ->
+            ListItem(
+                headlineContent = { Text(chat.title, maxLines = 2) },
+                supportingContent = { Text(format.format(java.util.Date(chat.updatedAt))) },
+                trailingContent = {
+                    IconButton(onClick = { onDelete(chat) }) {
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ai_history_delete))
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable { onOpen(chat) },
+            )
         }
     }
 }
