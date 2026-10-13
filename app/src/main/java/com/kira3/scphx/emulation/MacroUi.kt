@@ -7,6 +7,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -49,7 +59,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.kira3.scphx.R
+import com.kira3.scphx.data.macro.Comparison
 import com.kira3.scphx.data.macro.Macro
+import com.kira3.scphx.data.macro.MemoryCondition
 
 /** What the macro screens can ask for. */
 interface MacroActions {
@@ -58,6 +70,8 @@ interface MacroActions {
     fun record()
     fun rename(macro: Macro, name: String)
     fun setLoop(macro: Macro, loop: Boolean)
+    fun setStartCondition(macro: Macro, condition: MemoryCondition?)
+    fun setStopCondition(macro: Macro, condition: MemoryCondition?)
     fun delete(macro: Macro)
     fun manage()
 }
@@ -107,36 +121,63 @@ fun MacroButton(macros: List<Macro>, playing: Boolean, actions: MacroActions, mo
     }
 }
 
-/** A pill at the top of the screen while a macro records or plays, with the button that ends it. */
+/**
+ * A pill while a macro records or plays, with the button that ends it. Held upright it sits just
+ * under the picture (which the core draws at the top with the shape [gameAspect], width / height),
+ * so it does not cover the game; otherwise it is at the top of the screen.
+ */
 @Composable
-fun MacroStatus(label: String, onStop: () -> Unit, recording: Boolean, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize().safeDrawingPadding().padding(top = 8.dp), contentAlignment = Alignment.TopCenter) {
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color.Black.copy(alpha = 0.7f))
-                .clickable(role = Role.Button, onClick = onStop)
-                .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (recording) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF5252)))
+fun MacroStatus(
+    label: String,
+    onStop: () -> Unit,
+    recording: Boolean,
+    gameAspect: Float? = null,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val upright = maxHeight > maxWidth
+        val top = if (upright && gameAspect != null) {
+            // The picture is shifted down by the display cutout (see EmulationActivity.pushDisplayCutoutInset).
+            val cutout = WindowInsets.displayCutout.asPaddingValues().calculateTopPadding()
+            cutout + maxWidth / gameAspect + 8.dp
+        } else {
+            WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding() + 8.dp
+        }
+        Box(Modifier.fillMaxWidth().padding(top = top), contentAlignment = Alignment.TopCenter) {
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .clickable(role = Role.Button, onClick = onStop)
+                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (recording) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF5252)))
+                }
+                Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                Icon(
+                    painterResource(R.drawable.ic_stop),
+                    contentDescription = stringResource(if (recording) R.string.macro_stop_recording else R.string.macro_stop),
+                    tint = Color.White,
+                    modifier = Modifier.padding(6.dp).size(20.dp),
+                )
             }
-            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-            Icon(
-                painterResource(R.drawable.ic_stop),
-                contentDescription = stringResource(if (recording) R.string.macro_stop_recording else R.string.macro_stop),
-                tint = Color.White,
-                modifier = Modifier.padding(6.dp).size(20.dp),
-            )
         }
     }
 }
 
 /** The game's macros over the paused game. [macros] is null while they are read. */
 @Composable
-fun MacrosMenu(macros: List<Macro>?, actions: MacroActions, onClose: () -> Unit) {
+fun MacrosMenu(
+    macros: List<Macro>?,
+    actions: MacroActions,
+    /** Addresses (and their sizes) the memory search has narrowed down, to pick from for a condition. */
+    suggestions: List<Pair<Int, Int>>,
+    onClose: () -> Unit,
+) {
+    var editing by remember { mutableStateOf<Pair<Macro, Boolean>?>(null) }
     var renaming by remember { mutableStateOf<Macro?>(null) }
     var deleting by remember { mutableStateOf<Macro?>(null) }
     Box(
@@ -183,7 +224,13 @@ fun MacrosMenu(macros: List<Macro>?, actions: MacroActions, onClose: () -> Unit)
                                 headlineContent = { Text(macro.name, maxLines = 1) },
                                 supportingContent = { Text(macro.details()) },
                                 trailingContent = {
-                                    MacroMenu(macro, actions, onRename = { renaming = macro }, onDelete = { deleting = macro })
+                                    MacroMenu(
+                                        macro,
+                                        actions,
+                                        onRename = { renaming = macro },
+                                        onDelete = { deleting = macro },
+                                        onCondition = { start -> editing = macro to start },
+                                    )
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.clickable { actions.play(macro) },
@@ -195,6 +242,18 @@ fun MacrosMenu(macros: List<Macro>?, actions: MacroActions, onClose: () -> Unit)
         }
     }
 
+    editing?.let { (macro, start) ->
+        ConditionDialog(
+            start = start,
+            current = if (start) macro.startWhen else macro.stopWhen,
+            suggestions = suggestions,
+            onDismiss = { editing = null },
+            onSave = { condition ->
+                editing = null
+                if (start) actions.setStartCondition(macro, condition) else actions.setStopCondition(macro, condition)
+            },
+        )
+    }
     renaming?.let { macro ->
         var name by remember(macro.id) { mutableStateOf(macro.name) }
         AlertDialog(
@@ -235,7 +294,13 @@ fun MacrosMenu(macros: List<Macro>?, actions: MacroActions, onClose: () -> Unit)
 }
 
 @Composable
-private fun MacroMenu(macro: Macro, actions: MacroActions, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun MacroMenu(
+    macro: Macro,
+    actions: MacroActions,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onCondition: (start: Boolean) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
@@ -245,6 +310,14 @@ private fun MacroMenu(macro: Macro, actions: MacroActions, onRename: () -> Unit,
             DropdownMenuItem(
                 text = { Text(stringResource(if (macro.loop) R.string.macro_loop_off else R.string.macro_loop_on)) },
                 onClick = { open = false; actions.setLoop(macro, !macro.loop) },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.macro_start_condition)) },
+                onClick = { open = false; onCondition(true) },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.macro_stop_condition)) },
+                onClick = { open = false; onCondition(false) },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.macro_rename)) },
@@ -263,6 +336,8 @@ private fun Macro.details(): String {
     val inputs = pluralStringResource(R.plurals.macro_inputs, events.size, events.size)
     val parts = mutableListOf(inputs, durationLabel(length * 1000 / FRAMES_PER_SECOND))
     if (loop) parts += stringResource(R.string.macro_loop)
+    startWhen?.let { parts += stringResource(R.string.macro_start_summary, it.describe()) }
+    stopWhen?.let { parts += stringResource(R.string.macro_stop_summary, it.describe()) }
     return parts.joinToString(" · ")
 }
 
@@ -274,3 +349,93 @@ fun durationLabel(ms: Long): String {
 
 /** Frames in a second of game time, for showing a macro's length. */
 private const val FRAMES_PER_SECOND = 60
+
+/**
+ * Sets (or clears) a condition on the game's memory: the address as the memory search shows it
+ * (hex), the size, how to compare, and the number. [suggestions] fill the address in one tap.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ConditionDialog(
+    start: Boolean,
+    current: MemoryCondition?,
+    suggestions: List<Pair<Int, Int>>,
+    onDismiss: () -> Unit,
+    onSave: (MemoryCondition?) -> Unit,
+) {
+    var address by remember { mutableStateOf(current?.let { "%08X".format(it.address) }.orEmpty()) }
+    var size by remember { mutableStateOf(current?.size ?: 4) }
+    var op by remember { mutableStateOf(current?.op ?: Comparison.Equal) }
+    var value by remember { mutableStateOf(current?.value?.toString().orEmpty()) }
+    val parsed = address.toIntOrNull(16)?.takeIf { it in 0 until MAIN_RAM }
+        ?.let { a -> value.toLongOrNull()?.takeIf { it >= 0 }?.let { MemoryCondition(a, size, op, it) } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(if (start) R.string.macro_start_condition else R.string.macro_stop_condition)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(if (start) R.string.macro_start_hint else R.string.macro_stop_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    address,
+                    { address = it.filter { c -> c.isDigit() || c in 'a'..'f' || c in 'A'..'F' }.take(8).uppercase() },
+                    label = { Text(stringResource(R.string.macro_condition_address)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (suggestions.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for ((a, s) in suggestions.take(MAX_SUGGESTIONS)) {
+                            FilterChip(
+                                selected = address == "%08X".format(a) && size == s,
+                                onClick = { address = "%08X".format(a); size = s },
+                                label = { Text("%08X".format(a)) },
+                            )
+                        }
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (s in listOf(1, 2, 4)) {
+                        FilterChip(
+                            selected = size == s,
+                            onClick = { size = s },
+                            label = { Text(stringResource(R.string.search_size, s)) },
+                        )
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (c in Comparison.entries) {
+                        FilterChip(selected = op == c, onClick = { op = c }, label = { Text(c.symbol) })
+                    }
+                }
+                OutlinedTextField(
+                    value,
+                    { value = it.filter(Char::isDigit).take(10) },
+                    label = { Text(stringResource(R.string.search_value)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = parsed != null, onClick = { onSave(parsed) }) {
+                Text(stringResource(R.string.macro_condition_save))
+            }
+        },
+        dismissButton = {
+            Row {
+                if (current != null) {
+                    TextButton(onClick = { onSave(null) }) { Text(stringResource(R.string.macro_condition_clear)) }
+                }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+            }
+        },
+    )
+}
+
+private const val MAIN_RAM = 32 * 1024 * 1024
+private const val MAX_SUGGESTIONS = 6

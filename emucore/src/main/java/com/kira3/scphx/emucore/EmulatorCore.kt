@@ -460,6 +460,14 @@ class EmulatorCore(context: Context) {
     /** Frames the game has run (the core's own count). A load state sets it back. */
     val frameCount: Long get() = NativeApp.getFrameCount()
 
+    /** The unsigned little-endian number of [size] (1, 2 or 4) bytes at [address], or null if it cannot be read. */
+    fun readValue(address: Int, size: Int): Long? {
+        val bytes = readMemory(address, size) ?: return null
+        var v = 0L
+        for (i in size - 1 downTo 0) v = (v shl 8) or (bytes[i].toLong() and 0xFF)
+        return v
+    }
+
     /** [length] bytes of main RAM from [address] (the EE address space, first [MAIN_RAM_BYTES]), or null with no game or out of range. */
     fun readMemory(address: Int, length: Int): ByteArray? {
         val bytes = ByteArray(length)

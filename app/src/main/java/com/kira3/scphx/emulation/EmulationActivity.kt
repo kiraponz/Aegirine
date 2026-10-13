@@ -58,6 +58,7 @@ import com.kira3.scphx.emulation.macro.MacroPlayer
 import com.kira3.scphx.emulation.macro.MacroRecorder
 import com.kira3.scphx.emulation.search.MemorySearch
 import com.kira3.scphx.data.macro.Macro
+import com.kira3.scphx.data.macro.MemoryCondition
 import com.kira3.scphx.data.memo.Memo
 import com.kira3.scphx.emulation.input.PadEditor
 import com.kira3.scphx.emulation.input.TouchPad
@@ -305,18 +306,25 @@ class EmulationActivity : ComponentActivity() {
                     if (serial != null && settings?.gemini?.memosVisible == true && memoList.isNotEmpty()) {
                         MemoOverlay(memoList, memoActions)
                     }
+                    val gameAspect = settings?.output?.let { gameAspectOf(it.aspectRatio, it.customAspectRatio) }
                     val playingMacro by macroPlayer.playing.collectAsState()
                     if (recordingSeconds >= 0) {
                         MacroStatus(
                             stringResource(R.string.macro_recording, durationLabel(recordingSeconds * 1000)),
                             onStop = ::stopRecording,
                             recording = true,
+                            gameAspect = gameAspect,
                         )
                     } else if (playingMacro != null) {
+                        val waiting by macroPlayer.waiting.collectAsState()
                         MacroStatus(
-                            stringResource(R.string.macro_playing, playingMacro?.name.orEmpty()),
+                            stringResource(
+                                if (waiting) R.string.macro_waiting else R.string.macro_playing,
+                                playingMacro?.name.orEmpty(),
+                            ),
                             onStop = macroPlayer::stop,
                             recording = false,
+                            gameAspect = gameAspect,
                         )
                     }
                     val current = settings
@@ -330,7 +338,12 @@ class EmulationActivity : ComponentActivity() {
                         MemorySearchMenu(memorySearch, ::closeSearch)
                     }
                     if (macrosOpen) {
-                        MacrosMenu(macroList, macroActions, ::closeMacros)
+                        MacrosMenu(
+                            macroList,
+                            macroActions,
+                            memorySearch.state.hits.map { it.address to memorySearch.state.size },
+                            ::closeMacros,
+                        )
                     }
                     padEditor?.let { PadEditorBar(it, serial != null, ::closePadEditor) { closePadEditor(null) } }
                     AiPanelHost(aiShot, aiState, ::askGemini, if (serial != null) ::saveMemo else null, ::closeAi)
@@ -899,6 +912,16 @@ class EmulationActivity : ComponentActivity() {
         override fun setLoop(macro: Macro, loop: Boolean) {
             if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
             updateMacro(macro.id) { it.copy(loop = loop) }
+        }
+
+        override fun setStartCondition(macro: Macro, condition: MemoryCondition?) {
+            if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
+            updateMacro(macro.id) { it.copy(startWhen = condition) }
+        }
+
+        override fun setStopCondition(macro: Macro, condition: MemoryCondition?) {
+            if (macroPlayer.playing.value?.id == macro.id) macroPlayer.stop()
+            updateMacro(macro.id) { it.copy(stopWhen = condition) }
         }
 
         override fun delete(macro: Macro) {

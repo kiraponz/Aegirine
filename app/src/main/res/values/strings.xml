@@ -692,6 +692,16 @@
     <string name="macro_delete">Delete</string>
     <string name="macro_delete_title">Delete %1$s?</string>
     <string name="macro_loop">Loop</string>
+    <string name="macro_start_condition">Start condition</string>
+    <string name="macro_stop_condition">Stop condition</string>
+    <string name="macro_start_hint">Each run waits until this holds in the game\'s memory (find the address with Memory search).</string>
+    <string name="macro_stop_hint">The macro, and its loop, ends as soon as this holds.</string>
+    <string name="macro_condition_address">Address (hex)</string>
+    <string name="macro_condition_save">Save</string>
+    <string name="macro_condition_clear">Clear</string>
+    <string name="macro_start_summary">Start: %1$s</string>
+    <string name="macro_stop_summary">Stop: %1$s</string>
+    <string name="macro_waiting">Waiting for %1$s</string>
     <string name="macro_loop_on">Play in a loop</string>
     <string name="macro_loop_off">Play once</string>
     <plurals name="macro_inputs">
