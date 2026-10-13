@@ -635,6 +635,7 @@
     <string name="cheats_pick_game_empty">No games with a serial yet. Add your game folder in the library.</string>
     <string name="menu_cheats">Cheats</string>
     <string name="search_title">Memory search</string>
+    <string name="search_peek_hint">Hold the title to see the game behind this panel.</string>
     <string name="search_hint_first">Enter the number as the game shows it now (an HP, say) and scan. Then play until it changes and scan again with the new number.</string>
     <string name="search_hint_next">Close this to let the game run. When the number has changed, come back, pick how, and scan again until a few addresses are left.</string>
     <string name="search_size">%1$d byte(s)</string>

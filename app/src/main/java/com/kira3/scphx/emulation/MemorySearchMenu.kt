@@ -5,7 +5,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +48,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -54,6 +60,7 @@ import com.kira3.scphx.emulation.search.MemorySearch
 import com.kira3.scphx.emulation.search.MemorySearch.Mode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Finds the address of a number in the game's memory (a character's HP, say): scan for the value,
@@ -83,10 +90,14 @@ fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Uni
 
     editing?.let { EditValueDialog(search, it) { editing = null } }
 
+    // Holding the title makes the panel see-through, to look at the game behind it.
+    var peeking by remember { mutableStateOf(false) }
+    val fade by animateFloatAsState(if (peeking) 0.12f else 1f, label = "peek")
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
+            .background(Color.Black.copy(alpha = 0.6f * fade))
             .clickable(interactionSource = null, indication = null, onClick = onClose)
             .safeDrawingPadding()
             .padding(16.dp),
@@ -98,6 +109,7 @@ fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Uni
             modifier = Modifier
                 .widthIn(max = 560.dp)
                 .fillMaxWidth()
+                .graphicsLayer { alpha = fade }
                 .clickable(interactionSource = null, indication = null) {},
         ) {
             Column(
@@ -108,12 +120,17 @@ fun MemorySearchMenu(search: MemorySearch, editable: Boolean, onClose: () -> Uni
                     Text(
                         stringResource(R.string.search_title),
                         style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).padding(vertical = 12.dp).holdToPeek { peeking = it },
                     )
                     TextButton(onClick = onClose) { Text(stringResource(R.string.menu_resume)) }
                 }
                 Text(
                     stringResource(if (state.started) R.string.search_hint_next else R.string.search_hint_first),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    stringResource(R.string.search_peek_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -287,6 +304,22 @@ private fun EditValueDialog(search: MemorySearch, hits: List<MemorySearch.Hit>, 
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) } },
     )
+}
+
+/** Tells [onHold] true once the pointer has stayed down for the long-press time, and false when it lifts. */
+private fun Modifier.holdToPeek(onHold: (Boolean) -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        val lifted = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
+        if (lifted == null) {
+            onHold(true)
+            try {
+                waitForUpOrCancellation()
+            } finally {
+                onHold(false)
+            }
+        }
+    }
 }
 
 private fun modeLabel(mode: Mode) = when (mode) {
