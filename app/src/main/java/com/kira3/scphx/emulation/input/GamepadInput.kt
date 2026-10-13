@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import com.kira3.scphx.emucore.EmulatorCore
 import com.kira3.scphx.emucore.PadButton
 import com.kira3.scphx.emucore.PadStick
+import com.kira3.scphx.emucore.settings.ControlsSettings
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -36,11 +37,37 @@ class GamepadInput(private val core: EmulatorCore, private val port: Int = 0) {
 
     private val sentStick = Array(PadStick.entries.size) { FloatArray(2) }
 
+    @Volatile
+    private var keyMap: Map<Int, PadButton> = DEFAULT_KEY_MAP
+    private var deadzone = DEFAULT_DEADZONE
+    private var triggerThreshold = DEFAULT_TRIGGER_THRESHOLD
+
     private val rightStickAxisCache = HashMap<Int, Pair<Int, Int>>()
+
+    /** Takes the button assignments, dead zone and trigger threshold from the settings. */
+    fun configure(controls: ControlsSettings) {
+        val map = controls.buttonMap
+        val assigned = mapOf(
+            PadButton.Up to map.up, PadButton.Down to map.down, PadButton.Left to map.left,
+            PadButton.Right to map.right, PadButton.Cross to map.cross, PadButton.Circle to map.circle,
+            PadButton.Square to map.square, PadButton.Triangle to map.triangle, PadButton.L1 to map.l1,
+            PadButton.R1 to map.r1, PadButton.L2 to map.l2, PadButton.R2 to map.r2, PadButton.L3 to map.l3,
+            PadButton.R3 to map.r3, PadButton.Start to map.start, PadButton.Select to map.select,
+        )
+        val newMap = HashMap<Int, PadButton>()
+        for ((button, key) in assigned) if (key != KeyEvent.KEYCODE_UNKNOWN) newMap[key] = button
+        deadzone = (controls.stickDeadzone / 100f).coerceIn(0f, 0.9f)
+        triggerThreshold = (controls.triggerThreshold / 100f).coerceIn(0.01f, 0.95f)
+        if (newMap != keyMap) {
+            // A key held under the old assignments must not stay pressed.
+            keyMap = newMap
+            releaseAll()
+        }
+    }
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (!event.isFromGamepad()) return false
-        val button = KEY_MAP[event.keyCode] ?: return false
+        val button = keyMap[event.keyCode] ?: return false
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount > 0) return true
@@ -133,15 +160,15 @@ class GamepadInput(private val core: EmulatorCore, private val port: Int = 0) {
     }
 
     private fun triggerPressure(value: Float): Float =
-        if (value > TRIGGER_THRESHOLD) value.coerceAtMost(1f) else 0f
+        if (value > triggerThreshold) value.coerceAtMost(1f) else 0f
 
     /** Applies a radial deadzone, sends the stick if it moved, and returns its magnitude. */
     private fun sendStick(stick: PadStick, rawX: Float, rawY: Float): Float {
         val mag = hypot(rawX, rawY)
-        val (x, y) = if (mag <= STICK_DEADZONE) {
+        val (x, y) = if (mag <= deadzone) {
             0f to 0f
         } else {
-            val scale = ((mag - STICK_DEADZONE) / (1f - STICK_DEADZONE)).coerceAtMost(1f) / mag
+            val scale = ((mag - deadzone) / (1f - deadzone)).coerceAtMost(1f) / mag
             rawX * scale to rawY * scale
         }
         val sent = sentStick[stick.ordinal]
@@ -183,7 +210,7 @@ class GamepadInput(private val core: EmulatorCore, private val port: Int = 0) {
     private companion object {
         val BUTTONS = PadButton.entries
 
-        val KEY_MAP = mapOf(
+        val DEFAULT_KEY_MAP = mapOf(
             KeyEvent.KEYCODE_BUTTON_A to PadButton.Cross,
             KeyEvent.KEYCODE_BUTTON_B to PadButton.Circle,
             KeyEvent.KEYCODE_BUTTON_X to PadButton.Square,
@@ -203,10 +230,10 @@ class GamepadInput(private val core: EmulatorCore, private val port: Int = 0) {
         )
 
         const val VENDOR_NINTENDO = 0x057E
-        const val STICK_DEADZONE = 0.15f
+        const val DEFAULT_DEADZONE = 0.15f
+        const val DEFAULT_TRIGGER_THRESHOLD = 0.08f
         const val STICK_EPSILON = 0.004f
         const val HAT_THRESHOLD = 0.5f
-        const val TRIGGER_THRESHOLD = 0.08f
         const val DELIBERATE_THRESHOLD = 0.5f
     }
 }

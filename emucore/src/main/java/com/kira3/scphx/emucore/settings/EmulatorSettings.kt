@@ -1,5 +1,6 @@
 package com.kira3.scphx.emucore.settings
 
+import android.view.KeyEvent
 import kotlinx.serialization.Serializable
 
 /**
@@ -93,6 +94,36 @@ data class ControlsSettings(
     val padOpacity: Int = 100,
     /** Vibrate when a button is pressed. */
     val padHaptics: Boolean = true,
+    /** Stick dead zone of a physical controller, as a percent of the stick's travel. */
+    val stickDeadzone: Int = 15,
+    /** How far a physical controller's analog trigger must go to press L2/R2, as a percent. */
+    val triggerThreshold: Int = 8,
+    /** Which key of a physical controller presses each PS2 button. */
+    val buttonMap: ButtonMapSettings = ButtonMapSettings(),
+)
+
+/**
+ * The Android key code (KeyEvent.KEYCODE_*) that presses each PS2 button; 0 leaves the button
+ * without a key. The D-pad's HAT axis and the analog triggers work whatever is set here.
+ */
+@Serializable
+data class ButtonMapSettings(
+    val up: Int = KeyEvent.KEYCODE_DPAD_UP,
+    val down: Int = KeyEvent.KEYCODE_DPAD_DOWN,
+    val left: Int = KeyEvent.KEYCODE_DPAD_LEFT,
+    val right: Int = KeyEvent.KEYCODE_DPAD_RIGHT,
+    val cross: Int = KeyEvent.KEYCODE_BUTTON_A,
+    val circle: Int = KeyEvent.KEYCODE_BUTTON_B,
+    val square: Int = KeyEvent.KEYCODE_BUTTON_X,
+    val triangle: Int = KeyEvent.KEYCODE_BUTTON_Y,
+    val l1: Int = KeyEvent.KEYCODE_BUTTON_L1,
+    val r1: Int = KeyEvent.KEYCODE_BUTTON_R1,
+    val l2: Int = KeyEvent.KEYCODE_BUTTON_L2,
+    val r2: Int = KeyEvent.KEYCODE_BUTTON_R2,
+    val l3: Int = KeyEvent.KEYCODE_BUTTON_THUMBL,
+    val r3: Int = KeyEvent.KEYCODE_BUTTON_THUMBR,
+    val start: Int = KeyEvent.KEYCODE_BUTTON_START,
+    val select: Int = KeyEvent.KEYCODE_BUTTON_SELECT,
 )
 
 /** Rewind: the core's autosaves, kept as a short history the player can go back to. */

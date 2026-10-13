@@ -67,6 +67,11 @@ import com.kira3.scphx.R
 import android.content.Context
 import android.hardware.input.InputManager
 import android.view.InputDevice
+import android.view.KeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.kira3.scphx.data.GpuDriver
 import com.kira3.scphx.emucore.settings.PerformancePreset
 import com.kira3.scphx.emucore.settings.SettingsValues
@@ -116,6 +121,8 @@ fun SettingRow(
         GpuDriverSetting -> GpuDriverRow(row, state, actions)
         BiosManageSetting -> BiosManageRow(row, actions)
         ControllersSetting -> ControllersRow(row)
+        is KeyAssignSetting -> KeyAssignRow(row, setting, actions)
+        is ResetSetting -> ResetRow(row, setting, state, isGame, actions)
         MemoryCardsManageSetting -> MemoryCardsManageRow(row, actions)
         is MemoryCardSlotSetting -> DialogChoiceRow(row, cardChoice(setting, state, values), actions)
     }
@@ -194,6 +201,102 @@ private fun ControllersRow(row: RowParams) {
             }
         },
     ) { Text(stringResource(ControllersSetting.title)) }
+}
+
+/** The key's name without its prefix: BUTTON_A, DPAD_UP. */
+private fun keyName(code: Int): String = KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")
+
+@Composable
+private fun KeyAssignRow(row: RowParams, setting: KeyAssignSetting, actions: SettingsActions) {
+    val path = setting.path!!
+    val current = (row.values[path] as? Number)?.toInt() ?: setting.default
+    var open by rememberSaveable { mutableStateOf(false) }
+    SegmentedListItem(
+        onClick = { open = true },
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        enabled = row.enabled,
+        overlineContent = row.overline,
+        supportingContent = {
+            Supporting(
+                setting,
+                value = if (current == KeyEvent.KEYCODE_UNKNOWN) stringResource(R.string.settings_key_none) else keyName(current),
+                showSummary = false,
+            )
+        },
+    ) { Text(stringResource(setting.title)) }
+
+    if (open) {
+        val focus = remember { FocusRequester() }
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(stringResource(setting.title)) },
+            text = {
+                Text(
+                    stringResource(R.string.settings_key_prompt),
+                    modifier = Modifier
+                        .focusRequester(focus)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            val native = event.nativeKeyEvent
+                            val fromController = native.isFromSource(InputDevice.SOURCE_GAMEPAD) ||
+                                native.isFromSource(InputDevice.SOURCE_JOYSTICK) || native.isFromSource(InputDevice.SOURCE_DPAD)
+                            if (!fromController || native.keyCode == KeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
+                            if (native.action == KeyEvent.ACTION_DOWN && native.repeatCount == 0) {
+                                open = false
+                                if (native.keyCode != current) actions.set(path, native.keyCode)
+                            }
+                            true
+                        },
+                )
+                LaunchedEffect(Unit) { focus.requestFocus() }
+            },
+            confirmButton = {
+                TextButton(onClick = { open = false; actions.set(path, setting.default) }) {
+                    Text(stringResource(R.string.settings_key_default))
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { open = false; actions.set(path, KeyEvent.KEYCODE_UNKNOWN) }) {
+                        Text(stringResource(R.string.settings_key_clear))
+                    }
+                    TextButton(onClick = { open = false }) { Text(stringResource(R.string.settings_key_cancel)) }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ResetRow(row: RowParams, setting: ResetSetting, state: SettingsUiState, isGame: Boolean, actions: SettingsActions) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    SegmentedListItem(
+        onClick = { open = true },
+        shapes = row.shapes,
+        colors = settingsListColors(),
+        modifier = row.modifier,
+        supportingContent = { Text(stringResource(setting.summary)) },
+    ) { Text(stringResource(setting.title)) }
+
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(stringResource(setting.title)) },
+            text = { Text(stringResource(setting.summary)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    open = false
+                    for ((path, default) in setting.defaults) {
+                        // In a game, drop the override so the value follows the global settings again.
+                        if (isGame) { if (path in state.overrides) actions.reset(path) } else actions.set(path, default)
+                    }
+                }) { Text(stringResource(R.string.settings_reset)) }
+            },
+            dismissButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.settings_key_cancel)) } },
+        )
+    }
 }
 
 /** Names of the game controllers connected now. */

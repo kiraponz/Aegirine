@@ -163,6 +163,21 @@ data object ControllersSetting : Setting(
     null, R.string.settings_controllers, 0, null, null, globalOnly = true,
 )
 
+/** The key of a physical controller that presses one PS2 button, learned by pressing it in a dialog. */
+class KeyAssignSetting(
+    path: String,
+    @StringRes title: Int,
+    /** The key this button has when nothing is changed. */
+    val default: Int,
+) : Setting(path, title, 0, null, null)
+
+/** Puts the settings at [defaults] (path to default value) back to those values (in a game: back to the global ones). */
+class ResetSetting(
+    @StringRes title: Int,
+    @StringRes summary: Int,
+    val defaults: List<Pair<String, Any>>,
+) : Setting(null, title, summary, null, null)
+
 /** The card in a memory card slot, chosen from the cards the app holds. */
 class MemoryCardSlotSetting(
     path: String,

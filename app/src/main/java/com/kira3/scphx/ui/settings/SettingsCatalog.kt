@@ -1,5 +1,6 @@
 package com.kira3.scphx.ui.settings
 
+import android.view.KeyEvent
 import com.kira3.scphx.R
 import com.kira3.scphx.ui.settings.Label.Companion.res
 import com.kira3.scphx.ui.settings.Label.Companion.text
@@ -406,6 +407,25 @@ object SettingsCatalog {
         ),
     )
 
+    private val keyAssignments = listOf(
+        KeyAssignSetting("controls.buttonMap.up", R.string.settings_button_up, KeyEvent.KEYCODE_DPAD_UP),
+        KeyAssignSetting("controls.buttonMap.down", R.string.settings_button_down, KeyEvent.KEYCODE_DPAD_DOWN),
+        KeyAssignSetting("controls.buttonMap.left", R.string.settings_button_left, KeyEvent.KEYCODE_DPAD_LEFT),
+        KeyAssignSetting("controls.buttonMap.right", R.string.settings_button_right, KeyEvent.KEYCODE_DPAD_RIGHT),
+        KeyAssignSetting("controls.buttonMap.cross", R.string.settings_button_cross, KeyEvent.KEYCODE_BUTTON_A),
+        KeyAssignSetting("controls.buttonMap.circle", R.string.settings_button_circle, KeyEvent.KEYCODE_BUTTON_B),
+        KeyAssignSetting("controls.buttonMap.square", R.string.settings_button_square, KeyEvent.KEYCODE_BUTTON_X),
+        KeyAssignSetting("controls.buttonMap.triangle", R.string.settings_button_triangle, KeyEvent.KEYCODE_BUTTON_Y),
+        KeyAssignSetting("controls.buttonMap.l1", R.string.settings_button_l1, KeyEvent.KEYCODE_BUTTON_L1),
+        KeyAssignSetting("controls.buttonMap.r1", R.string.settings_button_r1, KeyEvent.KEYCODE_BUTTON_R1),
+        KeyAssignSetting("controls.buttonMap.l2", R.string.settings_button_l2, KeyEvent.KEYCODE_BUTTON_L2),
+        KeyAssignSetting("controls.buttonMap.r2", R.string.settings_button_r2, KeyEvent.KEYCODE_BUTTON_R2),
+        KeyAssignSetting("controls.buttonMap.l3", R.string.settings_button_l3, KeyEvent.KEYCODE_BUTTON_THUMBL),
+        KeyAssignSetting("controls.buttonMap.r3", R.string.settings_button_r3, KeyEvent.KEYCODE_BUTTON_THUMBR),
+        KeyAssignSetting("controls.buttonMap.start", R.string.settings_button_start, KeyEvent.KEYCODE_BUTTON_START),
+        KeyAssignSetting("controls.buttonMap.select", R.string.settings_button_select, KeyEvent.KEYCODE_BUTTON_SELECT),
+    )
+
     private fun controls() = listOf(
         SettingsSection(
             R.string.settings_section_virtual_pad,
@@ -423,7 +443,31 @@ object SettingsCatalog {
         ),
         SettingsSection(
             R.string.settings_section_controllers,
-            listOf(ControllersSetting),
+            listOf(
+                ControllersSetting,
+                Slider(
+                    "controls.stickDeadzone", R.string.settings_stick_deadzone,
+                    range = 0..50, step = 1, unit = R.string.settings_unit_percent,
+                ),
+                Slider(
+                    "controls.triggerThreshold", R.string.settings_trigger_threshold,
+                    range = 1..90, step = 1, unit = R.string.settings_unit_percent,
+                ),
+                ResetSetting(
+                    R.string.settings_stick_reset, R.string.settings_stick_reset_summary,
+                    listOf("controls.stickDeadzone" to 15, "controls.triggerThreshold" to 8),
+                ),
+            ),
+        ),
+        SettingsSection(
+            R.string.settings_section_button_map,
+            listOf(
+                *keyAssignments.toTypedArray(),
+                ResetSetting(
+                    R.string.settings_key_reset_all, R.string.settings_key_reset_all_summary,
+                    keyAssignments.map { it.path!! to it.default },
+                ),
+            ),
         ),
     )
 

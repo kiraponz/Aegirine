@@ -459,6 +459,7 @@ class EmulationActivity : ComponentActivity() {
     private suspend fun apply(global: EmulatorSettings, overrides: SettingsOverrides) {
         core.applySettings(global, overrides, serial)
         settings = SettingsJson.merge(global, overrides)
+        settings?.let { gamepad.configure(it.controls) }
     }
 
     /**
