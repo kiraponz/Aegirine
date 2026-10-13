@@ -58,7 +58,7 @@ class LibraryViewModel(
 
     private val query = MutableStateFlow("")
 
-    /** Favorites first, then the chosen order; only games matching the search. */
+    /** Favorites first, then games with a suspend state, then the chosen order; only games matching the search. */
     private val shown = combine(games, libraryRepository.sort, query) { games, sort, query ->
         val words = query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
         val matching = games.filter { game ->
@@ -68,7 +68,9 @@ class LibraryViewModel(
                     game.serial?.lowercase()?.contains(word) == true
             }
         }
-        Triple(matching.sortedWith(compareByDescending<Game> { it.record.favorite }.then(sort.comparator())), games.size, sort)
+        Triple(matching.sortedWith(compareByDescending<Game> { it.record.favorite }
+            .thenByDescending { it.resumable }
+            .then(sort.comparator())), games.size, sort)
     }
 
     val uiState: StateFlow<LibraryUiState> = combine(
