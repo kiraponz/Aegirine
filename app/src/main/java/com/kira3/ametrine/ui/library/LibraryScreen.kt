@@ -333,11 +333,20 @@ private fun LibraryContent(
                         }
                         if (unrecognizedOpen) {
                             items(state.unrecognized, key = { "unrecognized/" + it.uri }) { game ->
-                                ListItem(
-                                    headlineContent = { Text(game.fileName, maxLines = 2) },
-                                    supportingContent = { Text(game.fileDetails(), maxLines = 1) },
-                                    modifier = Modifier.clickable { onGameClick(game) },
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onGameClick(game) }
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                ) {
+                                    Text(game.fileName, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                                    Text(
+                                        game.fileDetails(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
                     }
