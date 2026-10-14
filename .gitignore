@@ -31,3 +31,6 @@ keystore.properties
 /CLAUDE.md
 /docs/
 
+
+# The core's prebuilt third-party libraries (external/aegirine-core/scripts/deps)
+/external/core-deps/
