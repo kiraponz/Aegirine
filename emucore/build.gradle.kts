@@ -1,3 +1,5 @@
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.serialization)
@@ -19,6 +21,9 @@ fun coreArgs(buildType: String) = listOf(
     // The NDK toolchain only searches inside the find root.
     "-DCMAKE_FIND_ROOT_PATH=$coreDepsDir",
     "-DANDROID_FRONTEND_DIR=${file("src/main/cpp")}",
+    // Built for 16 KiB pages, which also runs on the 4 KiB ones (the core only needs the system's
+    // pages to divide its own), so one library serves both kinds of device.
+    "-DHOST_PAGE_SIZE=16384",
 )
 
 android {
@@ -96,6 +101,79 @@ val coreJniLibs = tasks.register<Sync>("coreJniLibs") {
 }
 
 tasks.named("preBuild") { dependsOn(coreJniLibs) }
+
+// Copies named files into one folder of a generated source root, each under its own name.
+abstract class CollectFiles @Inject constructor(
+    private val fs: FileSystemOperations,
+) : DefaultTask() {
+    /** Output name to source file. */
+    @get:Input
+    abstract val files: MapProperty<String, File>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    val sources get() = files.get().values
+
+    /** Subfolder of [outputDir] the files land in. */
+    @get:Input
+    abstract val intoPath: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun collect() {
+        val entries = files.get()
+        val subdir = intoPath.get()
+        entries.values.filterNot { it.isFile }.let {
+            check(it.isEmpty()) { "License files missing (run build-dependencies-android.sh again, see AGENTS.md): $it" }
+        }
+        fs.sync {
+            into(outputDir)
+            for ((name, file) in entries) {
+                from(file) {
+                    into(subdir)
+                    rename { name }
+                }
+            }
+        }
+    }
+}
+
+// The license texts of the core and of what it links or ships, shown by the app's licenses
+// screen (app/.../OpenSourceComponents.kt names each file). The prebuilt libraries' texts are
+// saved by build-dependencies-android.sh; the app keeps the plain texts (MIT, zlib, OFL) itself.
+val collectCoreLicenses = tasks.register<CollectFiles>("collectCoreLicenses") {
+    val dep = "external/aegirine-core/dep"
+    val prebuilt = "external/core-deps/arm64-v8a/share/licenses"
+    val paths = mapOf(
+        "gpl-3.0.txt" to "external/aegirine-core/LICENSE",
+        "apache-2.0.txt" to "external/aegirine-core/data/resources/fonts/LICENSE.txt",
+        "fast_float.txt" to "$dep/fast_float/LICENSE-MIT",
+        "fmt.txt" to "$dep/fmt/LICENSE.rst",
+        "imgui.txt" to "$dep/imgui/LICENSE.txt",
+        "libchdr.txt" to "$dep/libchdr/LICENSE.txt",
+        "lzma.txt" to "$dep/lzma/LICENSE",
+        "rapidyaml.txt" to "$dep/rapidyaml/LICENSE.txt",
+        "rcheevos.txt" to "$dep/rcheevos/LICENSE",
+        "reshadefx.txt" to "$dep/reshadefx/LICENSE.md",
+        "simpleini.txt" to "$dep/simpleini/LICENCE.txt",
+        "vixl.txt" to "$dep/vixl/LICENCE",
+        "xxhash.txt" to "$dep/xxhash/LICENSE",
+    ) + listOf(
+        "cpuinfo", "freetype", "glslang", "libjpeg-turbo", "libpng", "libwebp", "shaderc", "soundtouch",
+        "spirv-cross", "spirv-headers", "spirv-tools", "zstd",
+    ).associate { "$it.txt" to "$prebuilt/$it.txt" }
+    files.set(paths.mapValues { rootProject.file(it.value) })
+    intoPath.set("licenses")
+    outputDir.set(layout.buildDirectory.dir("generated/coreLicenses"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(collectCoreLicenses, CollectFiles::outputDir)
+    }
+}
 
 dependencies {
     api(libs.kotlinx.coroutines.android)

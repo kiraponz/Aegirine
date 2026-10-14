@@ -49,6 +49,9 @@ void SetDisplayRefreshRate(float hz);
 /// [portrait_top]; otherwise in the middle.
 void SetDisplayLayout(bool portrait_top, u32 top_margin);
 
+/// Keeps the on-screen messages and overlays clear of these edges of the surface (the display cutout), in pixels.
+void SetOsdSafeArea(u32 left, u32 top, u32 right, u32 bottom);
+
 /// Sets bind [index] of the controller in [port] to [value] (0..1): one of AnalogController's
 /// buttons, or one of its half axes after them. Ignored with no system running.
 void SetPadBind(u32 port, u32 index, float value);

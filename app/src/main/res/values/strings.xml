@@ -631,20 +631,20 @@
     <string name="settings_about_summary">Version, source code and licenses</string>
     <string name="about_title">About</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_description">A PS2 emulator for Android. Its emulation core is ARMSX2, an ARM64 fork of PCSX2.</string>
-    <string name="about_bios_note">Games need a BIOS dumped from your own PS1. Ametrine does not include any BIOS or games.</string>
+    <string name="about_description">A PS1 emulator for Android. Its emulation core is aegirine-core, a fork of the last GPL-3.0 version of DuckStation.</string>
+    <string name="about_bios_note">Games need a BIOS dumped from your own PS1. Aegirine does not include any BIOS or games.</string>
     <string name="about_source">Source code</string>
     <string name="about_core">Emulation core</string>
-    <string name="about_core_summary">ARMSX2 at %1$s</string>
+    <string name="about_core_summary">aegirine-core at %1$s</string>
     <string name="about_license">License</string>
-    <string name="about_license_summary">GNU General Public License, version 3 or later</string>
+    <string name="about_license_summary">GNU General Public License, version 3</string>
     <string name="about_licenses">Open source licenses</string>
     <string name="about_licenses_summary">The libraries, fonts and data this app includes</string>
-    <string name="about_legal">This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to redistribute it under the terms of the GNU General Public License, version 3 or later.</string>
-    <string name="about_trademark">Ametrine is not affiliated with Sony Interactive Entertainment, PCSX2 or ARMSX2. PlayStation and PS2 are trademarks of Sony Interactive Entertainment Inc.</string>
+    <string name="about_legal">This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to redistribute it under the terms of the GNU General Public License, version 3.</string>
+    <string name="about_trademark">Aegirine is not affiliated with Sony Interactive Entertainment or DuckStation. PlayStation is a trademark of Sony Interactive Entertainment Inc.</string>
     <string name="about_no_browser">No app can open this link</string>
     <string name="about_source_url" translatable="false">https://github.com/kiraponz/Aegirine</string>
-    <string name="about_core_url" translatable="false">https://github.com/kiraponz/ARMSX2/tree/%1$s</string>
+    <string name="about_core_url" translatable="false">https://github.com/kiraponz/aegirine-core/tree/%1$s</string>
     <string name="licenses_title">Open source licenses</string>
     <string name="licenses_group_core">Emulation core</string>
     <string name="licenses_group_native">Native libraries</string>

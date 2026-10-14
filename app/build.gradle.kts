@@ -7,8 +7,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// The commit of the emulation core, shown in About. No core is wired in yet.
-val coreCommit = "unknown"
+// The commit of the emulation core (the aegirine-core submodule), shown in About.
+val coreCommit: String = providers.exec {
+    commandLine("git", "-C", rootProject.file("external/aegirine-core").path, "rev-parse", "HEAD")
+    isIgnoreExitValue = true
+}.standardOutput.asText.get().trim().ifEmpty { "unknown" }
 
 // The release signing key, from keystore.properties at the root (never committed; see
 // RELEASING.md). Without it a release build is unsigned.
@@ -56,6 +59,17 @@ android {
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
         }
+    }
+
+    androidResources {
+        // Core resources the app has no use for: the color emoji font (it needs SVG support, which
+        // the Android build leaves out, so messages draw Font Awesome icons), the post-processing
+        // shaders, the big-picture UI's images and sounds, SDL's controller database and the
+        // desktop's third-party notice (the licenses screen replaces it).
+        ignoreAssetsPatterns += listOf(
+            "TwitterColorEmoji-SVGinOT.ttf.zst", "<dir>shaders", "<dir>fullscreenui", "<dir>sounds",
+            "gamecontrollerdb.txt", "thirdparty.html",
+        )
     }
 
     compileOptions {

@@ -21,8 +21,8 @@ internal object NativeCore {
 
     init {
         val pageSize = runCatching { Os.sysconf(OsConstants._SC_PAGESIZE) }.getOrDefault(4096L)
-        // The core is built for 4 KiB pages and refuses to start on anything else.
-        loadError = if (pageSize != 4096L) {
+        // The core is built for 16 KiB pages, and also runs on 4 KiB ones; it refuses anything else.
+        loadError = if (pageSize != 4096L && pageSize != 16384L) {
             "Devices with a $pageSize-byte memory page size are not supported"
         } else {
             try {
@@ -73,6 +73,9 @@ internal object NativeCore {
      * surface pixels down (clear of the display cutout), else in the middle.
      */
     @JvmStatic external fun setDisplayLayout(portraitTop: Boolean, topMargin: Int)
+
+    /** The edges of the surface the on-screen messages and overlays keep clear of, in surface pixels. */
+    @JvmStatic external fun setOsdSafeArea(left: Int, top: Int, right: Int, bottom: Int)
 
     // ---- VM lifecycle ----
 

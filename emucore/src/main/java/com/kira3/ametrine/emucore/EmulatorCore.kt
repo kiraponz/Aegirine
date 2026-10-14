@@ -258,7 +258,7 @@ class EmulatorCore(context: Context) {
      * [ubwcFlagHint] turns on Turnip's UBWC flag hint, which recent Turnip builds need on
      * Adreno 740 to draw correctly; other drivers ignore it. Call before [runVm].
      *
-     * The core only uses the system driver so far (step 7).
+     * The core only uses the system driver: Aegirine offers no custom driver (docs/CORE.md).
      */
     @Suppress("UNUSED_PARAMETER")
     fun useVulkanDriver(driver: VulkanDriver?, ubwcFlagHint: Boolean) {
@@ -459,9 +459,9 @@ class EmulatorCore(context: Context) {
         NativeCore.setDisplayLayout(portraitRenderTop, portraitTopInset)
     }
 
-    /** Keeps the on-screen messages clear of the display cutout. Surface pixels. Step 7. */
-    @Suppress("UNUSED_PARAMETER")
-    fun setOsdSafeAreaInsets(left: Int, top: Int, right: Int, bottom: Int) = Unit
+    /** Keeps the on-screen messages and the core's overlays clear of the display cutout. Surface pixels. */
+    fun setOsdSafeAreaInsets(left: Int, top: Int, right: Int, bottom: Int) =
+        NativeCore.setOsdSafeArea(left, top, right, bottom)
 
     // ---- Input ----
 

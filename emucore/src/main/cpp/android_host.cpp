@@ -15,6 +15,7 @@
 
 #include "util/gpu_device.h"
 #include "util/image.h"
+#include "util/imgui_manager.h"
 #include "util/input_manager.h"
 #include "util/window_info.h"
 
@@ -100,6 +101,7 @@ static float s_refresh_rate = 0.0f;
 // Where the picture sits (SetDisplayLayout). Guarded by s_window_mutex.
 static bool s_portrait_top = true;
 static u32 s_top_margin = 0;
+static ImGuiManager::SafeAreaInsets s_osd_safe_area = {};
 
 // The app's cheats (SetCheats), installed in each game the core runs.
 static std::mutex s_cheats_mutex;
@@ -318,6 +320,17 @@ void AndroidHost::ApplyDisplayLayout()
   const bool top = s_portrait_top && s_window_height > s_window_width;
   g_settings.display_alignment = top ? DisplayAlignment::LeftOrTop : DisplayAlignment::Center;
   g_settings.display_top_margin = static_cast<u16>(top ? std::min<u32>(s_top_margin, 0xFFFF) : 0);
+  ImGuiManager::SetSafeAreaInsets(s_osd_safe_area);
+}
+
+void AndroidHost::SetOsdSafeArea(u32 left, u32 top, u32 right, u32 bottom)
+{
+  {
+    std::unique_lock lock(s_window_mutex);
+    s_osd_safe_area = {static_cast<float>(left), static_cast<float>(top), static_cast<float>(right),
+                       static_cast<float>(bottom)};
+  }
+  Host::RunOnCPUThread([]() { ApplyDisplayLayout(); });
 }
 
 void AndroidHost::SetPadBind(u32 port, u32 index, float value)

@@ -174,6 +174,13 @@ extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setDisplayLayout)(JNIEnv*, jclass,
   AndroidHost::SetDisplayLayout(portrait_top, static_cast<u32>(std::max(top_margin, 0)));
 }
 
+extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setOsdSafeArea)(JNIEnv*, jclass, jint left, jint top, jint right,
+                                                              jint bottom)
+{
+  AndroidHost::SetOsdSafeArea(static_cast<u32>(std::max(left, 0)), static_cast<u32>(std::max(top, 0)),
+                              static_cast<u32>(std::max(right, 0)), static_cast<u32>(std::max(bottom, 0)));
+}
+
 extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setPadBind)(JNIEnv*, jclass, jint port, jint index, jfloat value)
 {
   AndroidHost::SetPadBind(static_cast<u32>(port), static_cast<u32>(index), value);

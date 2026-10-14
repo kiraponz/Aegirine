@@ -60,11 +60,8 @@ object SettingsCatalog {
                     ),
                     inline = true,
                 ),
-                GpuDriverSetting,
-                Toggle(
-                    "output.turnipUbwcHint", R.string.settings_turnip_ubwc, R.string.settings_turnip_ubwc_summary,
-                    visibleWhen = { it.string("output.customDriverId").isNotEmpty() },
-                ),
+                // No custom Vulkan driver (GpuDriverSetting, the Turnip UBWC hint): the PS1's
+                // drawing is light enough for the system driver, or OpenGL where it falls short.
                 Choice(
                     "gpu.resolutionScale", R.string.settings_resolution, R.string.settings_resolution_summary,
                     listOf(
