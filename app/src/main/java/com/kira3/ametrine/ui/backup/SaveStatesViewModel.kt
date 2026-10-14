@@ -64,7 +64,7 @@ class SaveStatesViewModel(
         pending,
     ) { states, library, busy, message, pending ->
         libraryGames.value = library
-        val names = library.filter { it.serial != null }.associate { it.serial!! to it.title }
+        val names = library.filter { it.dataSerial != null }.associate { it.dataSerial!! to it.title }
         val games = states.groupBy { it.serial }
             .map { (serial, list) -> GameStates(serial, names[serial], list.sortedBy { it.slot }) }
             .sortedWith(compareBy({ it.title == null }, { it.title ?: it.serial }))
@@ -86,12 +86,14 @@ class SaveStatesViewModel(
                 return@launch
             }
             val states = uiState.value.games.orEmpty().flatMap { it.states }
-            val serials = (libraryGames.value.mapNotNull { it.serial } + states.map { it.serial } + listOfNotNull(file.serial)).distinct()
-            val titles = libraryGames.value.filter { it.serial != null }.associate { it.serial!! to it.title }
+            // A state is named by the disc it was saved on; its data is kept under the game's first disc.
+            val saved = file.serial?.let { serial -> libraryGames.value.firstOrNull { it.serial == serial }?.dataSerial ?: serial }
+            val serials = (libraryGames.value.mapNotNull { it.dataSerial } + states.map { it.serial } + listOfNotNull(saved)).distinct()
+            val titles = libraryGames.value.filter { it.dataSerial != null }.associate { it.dataSerial!! to it.title }
             val games = serials.map { serial ->
                 ImportGame(serial, titles[serial], states.filter { it.serial == serial }.map { it.slot }.toSet())
-            }.sortedWith(compareBy({ it.serial != file.serial }, { it.title == null }, { it.title ?: it.serial }))
-            pending.value = PendingImport(file, games, file.serial, file.slot)
+            }.sortedWith(compareBy({ it.serial != saved }, { it.title == null }, { it.title ?: it.serial }))
+            pending.value = PendingImport(file, games, saved, file.slot)
         }
     }
 

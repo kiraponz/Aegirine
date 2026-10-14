@@ -161,8 +161,8 @@ internal object NativeCore {
     /** Puts the disc image at [path] in the drive. Blocks. */
     @JvmStatic external fun insertDisc(path: String): Boolean
 
-    /** The serials of the discs of [serial]'s game in the GameDB, in disc order; null when it lists no set. */
-    @JvmStatic external fun getDiscSetSerials(serial: String): Array<String>?
+    /** The disc set's name, then the serials of its discs in disc order, for [serial]'s game in the GameDB; null when it lists no set. */
+    @JvmStatic external fun getDiscSet(serial: String): Array<String>?
 
     /** The GameDB's title for [serial], or null. */
     @JvmStatic external fun getGameDbTitle(serial: String): String?

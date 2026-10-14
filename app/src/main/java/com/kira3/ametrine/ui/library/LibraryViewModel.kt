@@ -31,11 +31,14 @@ data class LaunchRequest(val gameUri: Uri, val serial: String?)
 /** A game whose settings to open. */
 data class GameSettingsRequest(val serial: String, val title: String)
 
+/** One row of the library: a game, or every disc of a multi-disc game. [game] is the disc a tap starts. */
+class LibraryEntry(val game: Game, val discCount: Int, val key: String)
+
 data class LibraryUiState(
     val bios: Bios? = null,
     val hasGameFolder: Boolean = false,
     /** Null until the cached list has been read. */
-    val games: List<Game>? = null,
+    val games: List<LibraryEntry>? = null,
     /** Files the core found no PS1 disc in; they sit under their own heading at the end. */
     val unrecognized: List<Game> = emptyList(),
     val refreshing: Boolean = false,
@@ -71,27 +74,31 @@ class LibraryViewModel(
     /** Favorites first, then games with a suspend state, then the chosen order; only games matching the search. */
     private val shown = combine(games, libraryRepository.sort, query) { games, sort, query ->
         val words = query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
-        fun List<Game>.matching() = filter { game ->
-            words.all { word ->
-                word in game.title.lowercase() ||
-                    word in game.fileName.lowercase() ||
-                    game.serial?.lowercase()?.contains(word) == true
-            }
+        fun Game.matches() = words.all { word ->
+            word in title.lowercase() ||
+                word in fileName.lowercase() ||
+                serial?.lowercase()?.contains(word) == true
         }
         // Files whose serial isn't read yet are in neither list, so a scan doesn't flash BIOS files in.
         val recognized = games.filter { it.recognized }
         val unrecognized = games.filter { it.unrecognized }
+        // The discs of a game are one row; a tap starts the one that was in the drive last, else the first.
+        val entries = recognized.groupBy { it.groupSerial ?: it.uri.toString() }.map { (key, discs) ->
+            val lastDisc = discs.firstOrNull { it.uri.toString() == it.record.lastDisc }
+            LibraryEntry(lastDisc ?: discs.minBy { it.discIndex }, discs.size, key) to discs
+        }
         Shown(
-            games = recognized.matching().sortedWith(compareByDescending<Game> { it.record.favorite }
-                .thenByDescending { it.resumable }
-                .then(sort.comparator())),
-            unrecognized = unrecognized.matching().sortedBy { it.fileName.lowercase() },
+            games = entries.filter { (_, discs) -> discs.any { it.matches() } }.map { it.first }
+                .sortedWith(compareByDescending<LibraryEntry> { it.game.record.favorite }
+                    .thenByDescending { it.game.resumable }
+                    .thenComparing({ it.game }, sort.comparator())),
+            unrecognized = unrecognized.filter { it.matches() }.sortedBy { it.fileName.lowercase() },
             count = recognized.size + unrecognized.size,
             sort = sort,
         )
     }
 
-    private class Shown(val games: List<Game>, val unrecognized: List<Game>, val count: Int, val sort: LibrarySort)
+    private class Shown(val games: List<LibraryEntry>, val unrecognized: List<Game>, val count: Int, val sort: LibrarySort)
 
     val uiState: StateFlow<LibraryUiState> = combine(
         biosRepository.available.catch { emit(null) },
@@ -158,9 +165,10 @@ class LibraryViewModel(
             return
         }
         viewModelScope.launch {
-            val serial = readSerial(game) ?: return@launch
-            runCatching { libraryRepository.markPlayed(game.copy(serial = serial.value)) }
-            transient.update { it.copy(launchRequest = LaunchRequest(game.uri, serial.value)) }
+            readSerial(game) ?: return@launch
+            runCatching { libraryRepository.markPlayed(game) }
+            // The data of every disc of a game is kept under the first disc's serial.
+            transient.update { it.copy(launchRequest = LaunchRequest(game.uri, game.dataSerial)) }
         }
     }
 
@@ -181,14 +189,14 @@ class LibraryViewModel(
             val own = serial.value?.let { memoryCardRepository.saveIcons(SHORTCUT_ICON_SIZE, SHORTCUT_ICON_FILL, it) }
                 ?.firstOrNull()
             if (own != null) {
-                pinShortcut(game, serial.value, own.icon)
+                pinShortcut(game, game.dataSerial, own.icon)
                 return@launch
             }
             val choices = memoryCardRepository.saveIcons(PREVIEW_ICON_SIZE, 1f)
             if (choices.isEmpty()) {
-                pinShortcut(game, serial.value, null)
+                pinShortcut(game, game.dataSerial, null)
             } else {
-                transient.update { it.copy(shortcutIconRequest = ShortcutIconRequest(game, serial.value, choices)) }
+                transient.update { it.copy(shortcutIconRequest = ShortcutIconRequest(game, game.dataSerial, choices)) }
             }
         }
     }
@@ -216,9 +224,9 @@ class LibraryViewModel(
 
     fun onGameSettingsClicked(game: Game) {
         viewModelScope.launch {
-            val serial = readSerial(game) ?: return@launch
-            // Per-game settings are stored by serial.
-            val value = serial.value
+            readSerial(game) ?: return@launch
+            // Per-game settings are stored by serial, the first disc's for a multi-disc game.
+            val value = game.dataSerial
             if (value == null) {
                 showMessage(LibraryMessage.NoSerial)
             } else {

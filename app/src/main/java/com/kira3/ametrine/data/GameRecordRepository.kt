@@ -23,6 +23,8 @@ data class GameRecord(
     val favorite: Boolean = false,
     /** Replaces the GameDB name or file name when set. */
     val customTitle: String? = null,
+    /** URI of the disc of a multi-disc game that was in the drive last, which the library starts. */
+    val lastDisc: String? = null,
 )
 
 /**
@@ -52,6 +54,9 @@ class GameRecordRepository(context: Context) {
     /** For the :emu process, which has to write while it is being stopped. */
     fun addPlayTimeBlocking(key: String, seconds: Long, now: Long = System.currentTimeMillis()) =
         updateBlocking(key) { it.copy(playSeconds = it.playSeconds + seconds, lastPlayed = now) }
+
+    /** For the :emu process, when the player puts another disc in. */
+    fun setLastDiscBlocking(key: String, disc: String) = updateBlocking(key) { it.copy(lastDisc = disc) }
 
     private fun updateBlocking(key: String, transform: (GameRecord) -> GameRecord) {
         dir.mkdirs()

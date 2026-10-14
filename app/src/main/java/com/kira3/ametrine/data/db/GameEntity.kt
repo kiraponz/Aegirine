@@ -17,4 +17,10 @@ data class GameEntity(
     val serialRead: Boolean = false,
     /** The GameDB name for [serial]. Null when the database doesn't know the game. */
     val dbTitle: String? = null,
+    /** The serial of the first disc of the game's disc set (what its data is kept under); null for a game on one disc. */
+    val groupSerial: String? = null,
+    /** The GameDB's name for the disc set. */
+    val groupTitle: String? = null,
+    /** Where the disc comes in its disc set. */
+    val discIndex: Int = 0,
 )

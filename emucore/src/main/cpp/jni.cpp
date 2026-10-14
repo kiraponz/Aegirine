@@ -266,9 +266,9 @@ extern "C" JNIEXPORT jboolean JNICALL NATIVE_CORE(insertDisc)(JNIEnv* env, jclas
   return AndroidHost::InsertDisc(ToString(env, path));
 }
 
-/// The serials of the discs that belong to the game of [serial] in the database, in disc order;
-/// null when the database lists no disc set for it.
-extern "C" JNIEXPORT jobjectArray JNICALL NATIVE_CORE(getDiscSetSerials)(JNIEnv* env, jclass, jstring serial)
+/// The disc set's name, then the serials of its discs in disc order, for the game of [serial] in
+/// the database; null when the database lists no disc set for it.
+extern "C" JNIEXPORT jobjectArray JNICALL NATIVE_CORE(getDiscSet)(JNIEnv* env, jclass, jstring serial)
 {
   const GameDatabase::Entry* entry = GameDatabase::GetEntryForSerial(ToString(env, serial));
   if (!entry || entry->disc_set_serials.size() < 2)
@@ -276,11 +276,14 @@ extern "C" JNIEXPORT jobjectArray JNICALL NATIVE_CORE(getDiscSetSerials)(JNIEnv*
 
   jclass string_class = env->FindClass("java/lang/String");
   jobjectArray array =
-    env->NewObjectArray(static_cast<jsize>(entry->disc_set_serials.size()), string_class, nullptr);
+    env->NewObjectArray(static_cast<jsize>(entry->disc_set_serials.size() + 1), string_class, nullptr);
+  jstring name = env->NewStringUTF(entry->disc_set_name.c_str());
+  env->SetObjectArrayElement(array, 0, name);
+  env->DeleteLocalRef(name);
   for (size_t i = 0; i < entry->disc_set_serials.size(); i++)
   {
     jstring value = env->NewStringUTF(entry->disc_set_serials[i].c_str());
-    env->SetObjectArrayElement(array, static_cast<jsize>(i), value);
+    env->SetObjectArrayElement(array, static_cast<jsize>(i + 1), value);
     env->DeleteLocalRef(value);
   }
   env->DeleteLocalRef(string_class);

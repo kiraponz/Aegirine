@@ -38,11 +38,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-/** The library's games that have a serial, which is what a game's settings and cheats are keyed by. */
+/**
+ * The library's games that have a serial, which is what a game's settings and cheats are keyed by:
+ * one per game, the discs of a multi-disc game sharing theirs.
+ */
 class CheatGamesViewModel(repository: LibraryRepository) : ViewModel() {
     /** Null while the library is being read. */
     val games: StateFlow<List<Game>?> = repository.games
-        .map { list -> list.filter { it.serial != null } }
+        .map { list -> list.filter { it.dataSerial != null }.sortedBy { it.discIndex }.distinctBy { it.dataSerial } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     companion object {
@@ -86,14 +89,14 @@ fun CheatGamesScreen(
             contentPadding = listPadding(innerPadding),
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
-            itemsIndexed(list, key = { _, game -> game.uri.toString() }) { index, game ->
+            itemsIndexed(list, key = { _, game -> game.dataSerial!! }) { index, game ->
                 SegmentedListItem(
-                    onClick = { onPick(game.serial!!, game.title) },
+                    onClick = { onPick(game.dataSerial!!, game.title) },
                     shapes = segmentedShapes(index, list.size),
                     colors = settingsListColors(),
                     modifier = Modifier.animateItem(),
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-                    supportingContent = { Text(game.serial!!) },
+                    supportingContent = { Text(game.dataSerial!!) },
                 ) { Text(game.title, maxLines = 2) }
             }
             if (list.isEmpty()) {

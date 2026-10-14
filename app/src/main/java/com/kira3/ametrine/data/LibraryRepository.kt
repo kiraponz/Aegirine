@@ -35,20 +35,32 @@ data class Game(
     val sizeBytes: Long,
     /** The GameDB name for [serial], if the database knows the game. */
     val dbTitle: String? = null,
+    /** The serial of the first disc of the game's disc set, or null for a game on one disc. */
+    val groupSerial: String? = null,
+    /** The GameDB name of the disc set. */
+    val groupTitle: String? = null,
+    /** Where the disc comes in its disc set. */
+    val discIndex: Int = 0,
     val lastModified: Long = 0,
     val record: GameRecord = GameRecord(),
     /** Whether "Exit and resume later" left a state for the next start. */
     val resumable: Boolean = false,
 ) {
+    /** What the game's data (settings, cheats, states, records) is kept under: the same for every disc of a set. */
+    val dataSerial: String? get() = groupSerial ?: serial
+
     /**
-     * The user's title, else the GameDB name, else the file name without its extension. A playlist
-     * goes by its file name: the GameDB name is its first disc's.
+     * The user's title, else the disc set's name, else the GameDB name, else the file name without
+     * its extension. A playlist goes by its file name: the GameDB name is its first disc's.
      */
     val title: String
-        get() = record.customTitle ?: dbTitle?.takeIf { format != "M3U" } ?: fileName.substringBeforeLast('.')
+        get() = record.customTitle ?: groupTitle ?: dbTitle?.takeIf { format != "M3U" } ?: discTitle
+
+    /** This disc's own name, e.g. "Final Fantasy VII (Disc 2)", whatever the user called the game. */
+    val discTitle: String get() = dbTitle?.takeIf { format != "M3U" } ?: fileName.substringBeforeLast('.')
 
     /** Key in [GameRecordRepository]. */
-    val recordKey: String get() = GameRecordRepository.keyOf(serial, uri.toString())
+    val recordKey: String get() = GameRecordRepository.keyOf(dataSerial, uri.toString())
 
     /** Upper-case extension, e.g. "CHD". */
     val format: String get() = fileName.substringAfterLast('.', "").uppercase()
@@ -112,7 +124,7 @@ class LibraryRepository(
         val resumable = withContext(Dispatchers.IO) { core.resumableSerials() }
         rows.map { row ->
             val game = row.toGame()
-            game.copy(record = records[game.recordKey] ?: GameRecord(), resumable = game.serial in resumable)
+            game.copy(record = records[game.recordKey] ?: GameRecord(), resumable = game.dataSerial in resumable)
         }
     }
 
@@ -130,7 +142,8 @@ class LibraryRepository(
         records.update(game.recordKey) { it.copy(customTitle = title.trim().ifEmpty { null }) }
 
     /** Called when a game is started, so "recently played" is right before the first play time arrives. */
-    suspend fun markPlayed(game: Game) = records.update(game.recordKey) { it.copy(lastPlayed = System.currentTimeMillis()) }
+    suspend fun markPlayed(game: Game) =
+        records.update(game.recordKey) { it.copy(lastPlayed = System.currentTimeMillis(), lastDisc = game.uri.toString()) }
 
     val sort: Flow<LibrarySort> = preferences.librarySort.map { LibrarySort.fromName(it) }
 
@@ -185,22 +198,24 @@ class LibraryRepository(
      */
     suspend fun readSerial(game: Game): String? {
         if (game.serialRead) return game.serial
-        val (serial, dbTitle) = withContext(Dispatchers.IO) {
+        val (serial, dbTitle, discSet) = withContext(Dispatchers.IO) {
             core.initialize()
             val serial = core.readGameSerial(game.uri)
-            serial to serial?.let { core.gameDbTitle(it) }
+            Triple(serial, serial?.let { core.gameDbTitle(it) }, serial?.let { core.discSet(it) })
         }
-        dao.setSerial(game.uri.toString(), serial, dbTitle)
+        dao.setSerial(
+            game.uri.toString(), serial, dbTitle, discSet?.serials?.first(), discSet?.name,
+            discSet?.serials?.indexOf(serial)?.coerceAtLeast(0) ?: 0,
+        )
         return serial
     }
 
     /**
-     * The library's discs that make up [serial]'s game, in disc order; empty for a game the GameDB
-     * lists on one disc. Needs the core initialized.
+     * The library's discs that make up the game with [dataSerial] (see [Game.dataSerial]), in disc
+     * order; empty for a game the GameDB lists on one disc. Needs the core initialized.
      */
-    suspend fun discSet(serial: String): List<Game> = withContext(Dispatchers.IO) {
-        val serials = core.discSetSerials(serial)
-        if (serials.isEmpty()) return@withContext emptyList()
+    suspend fun discSet(dataSerial: String): List<Game> = withContext(Dispatchers.IO) {
+        val serials = core.discSet(dataSerial)?.serials ?: return@withContext emptyList()
         val bySerial = dao.getAll().filter { it.serial in serials }.associateBy { it.serial }
         serials.mapNotNull { bySerial[it]?.toGame() }
     }
@@ -280,6 +295,9 @@ class LibraryRepository(
         serialRead = serialRead,
         sizeBytes = sizeBytes,
         dbTitle = dbTitle,
+        groupSerial = groupSerial,
+        groupTitle = groupTitle,
+        discIndex = discIndex,
         lastModified = lastModified,
     )
 

@@ -420,11 +420,17 @@ class EmulatorCore(context: Context) {
         return NativeCore.insertDisc(path)
     }
 
+    /** The discs that make up one game: the GameDB's [name] for the set and the [serials] of its discs in disc order. */
+    class DiscSet(val name: String, val serials: List<String>)
+
     /**
-     * The serials of the discs that make up [serial]'s game, in disc order; empty for a game on one
-     * disc or one the GameDB doesn't know. Needs [initialize].
+     * The set [serial]'s disc belongs to, or null for a game on one disc or one the GameDB doesn't
+     * know. Needs [initialize].
      */
-    fun discSetSerials(serial: String): List<String> = NativeCore.getDiscSetSerials(serial)?.toList().orEmpty()
+    fun discSet(serial: String): DiscSet? {
+        val info = NativeCore.getDiscSet(serial) ?: return null
+        return DiscSet(name = info[0], serials = info.drop(1))
+    }
 
     // ---- Screenshots ----
 

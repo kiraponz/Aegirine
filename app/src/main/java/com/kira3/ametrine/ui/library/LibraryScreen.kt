@@ -304,9 +304,11 @@ private fun LibraryContent(
                             )
                         }
                     }
-                    items(games, key = { it.uri.toString() }) { game ->
+                    items(games, key = { it.key }) { entry ->
+                        val game = entry.game
                         GameRow(
                             game = game,
+                            discCount = entry.discCount,
                             onClick = { onGameClick(game) },
                             onSettings = { onGameSettingsClick(game) },
                             onFavoriteToggled = { onFavoriteToggled(game) },
@@ -360,6 +362,7 @@ private fun LibraryContent(
 @Composable
 private fun GameRow(
     game: Game,
+    discCount: Int,
     onClick: () -> Unit,
     onSettings: () -> Unit,
     onFavoriteToggled: () -> Unit,
@@ -371,7 +374,7 @@ private fun GameRow(
     Box {
         ListItem(
             headlineContent = { Text(game.title, maxLines = 2) },
-            supportingContent = { Text(game.details(), maxLines = 2) },
+            supportingContent = { Text(game.details(discCount), maxLines = 2) },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onFavoriteToggled) {
@@ -497,12 +500,19 @@ private fun Game.fileDetails(): String {
     return listOfNotNull(format.ifEmpty { null }, size.takeIf { sizeBytes > 0 }).joinToString(" · ")
 }
 
-/** Serial, format and size, then last played and play time, e.g. "SLUS-20312 · CHD · 2.1 GB". */
+/**
+ * Serial, format and size, then last played and play time, e.g. "SLUS-20312 · CHD · 2.1 GB". A game
+ * on several discs gives the number of discs in place of the serial and size.
+ */
 @Composable
-private fun Game.details(): String {
+private fun Game.details(discCount: Int): String {
     val context = LocalContext.current
     val size = Formatter.formatShortFileSize(context, sizeBytes)
-    val fileInfo = listOfNotNull(serial, format.ifEmpty { null }, size.takeIf { sizeBytes > 0 }).joinToString(" · ")
+    val fileInfo = if (discCount > 1) {
+        listOfNotNull(stringResource(R.string.library_discs, discCount), format.ifEmpty { null })
+    } else {
+        listOfNotNull(serial, format.ifEmpty { null }, size.takeIf { sizeBytes > 0 })
+    }.joinToString(" · ")
     val played = if (record.lastPlayed > 0) {
         val ago = DateUtils.getRelativeTimeSpanString(record.lastPlayed, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
         val time = playTimeText(record.playSeconds)
@@ -564,7 +574,7 @@ private fun LibraryContentPreview() {
         LibraryContent(
             state = LibraryUiState(
                 hasGameFolder = true,
-                games = listOf(Game(Uri.EMPTY, "Example Game (USA).chd", "SLUS-20312", true, 2_100_000_000L)),
+                games = listOf(LibraryEntry(Game(Uri.EMPTY, "Example Game (USA).chd", "SLUS-20312", true, 2_100_000_000L), 1, "example")),
             ),
             snackbarHostState = SnackbarHostState(),
             onOpenSettings = {},

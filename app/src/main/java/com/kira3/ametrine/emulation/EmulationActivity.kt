@@ -1082,7 +1082,7 @@ class EmulationActivity : ComponentActivity() {
         val serial = serial ?: return@withContext emptyList()
         val discs = runCatching { container.libraryRepository.discSet(serial) }.getOrDefault(emptyList())
         if (discs.size < 2) return@withContext emptyList()
-        discs.map { DiscChoice(it.title, it.uri == currentDiscUri, uri = it.uri) }
+        discs.map { DiscChoice(it.discTitle, it.uri == currentDiscUri, uri = it.uri) }
     }
 
     private val menuActions = object : InGameMenuActions {
@@ -1165,7 +1165,15 @@ class EmulationActivity : ComponentActivity() {
                 }
                 stateBusy = false
                 if (ok) {
-                    disc.uri?.let { currentDiscUri = it }
+                    disc.uri?.let { uri ->
+                        currentDiscUri = uri
+                        // The library starts this disc next time.
+                        recordKey?.let { key ->
+                            withContext(Dispatchers.IO) {
+                                runCatching { container.gameRecordRepository.setLastDiscBlocking(key, uri.toString()) }
+                            }
+                        }
+                    }
                     showMessage(getString(R.string.emulation_disc_changed, disc.title))
                     closeMenu()
                 } else {

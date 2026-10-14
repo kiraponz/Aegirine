@@ -21,8 +21,18 @@ interface GameDao {
     @Query("DELETE FROM games WHERE uri IN (:uris)")
     suspend fun delete(uris: List<String>)
 
-    @Query("UPDATE games SET serial = :serial, dbTitle = :dbTitle, serialRead = 1 WHERE uri = :uri")
-    suspend fun setSerial(uri: String, serial: String?, dbTitle: String?)
+    @Query(
+        "UPDATE games SET serial = :serial, dbTitle = :dbTitle, groupSerial = :groupSerial, " +
+            "groupTitle = :groupTitle, discIndex = :discIndex, serialRead = 1 WHERE uri = :uri",
+    )
+    suspend fun setSerial(
+        uri: String,
+        serial: String?,
+        dbTitle: String?,
+        groupSerial: String?,
+        groupTitle: String?,
+        discIndex: Int,
+    )
 
     /** Applies a scan result in one step so the library never shows a half-updated list. */
     @Transaction
