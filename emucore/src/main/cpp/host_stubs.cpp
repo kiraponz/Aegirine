@@ -1,5 +1,5 @@
-// Placeholders for the Host:: functions the core calls into the frontend, so the library links
-// before the frontend exists. Each one goes away as the real frontend implements it.
+// Placeholders for the Host:: functions the frontend does not implement yet, so the library
+// links. Each one goes away as the real frontend implements it (android_host.cpp).
 
 #include "core/achievements.h"
 #include "core/fullscreen_ui.h"
@@ -24,17 +24,6 @@
 #include <cstring>
 
 Log_SetChannel(Host);
-
-void Host::ReportFatalError(std::string_view title, std::string_view message)
-{
-  ERROR_LOG("{}: {}", title, message);
-  std::abort();
-}
-
-void Host::ReportErrorAsync(std::string_view title, std::string_view message)
-{
-  ERROR_LOG("{}: {}", title, message);
-}
 
 bool Host::ConfirmMessage(std::string_view title, std::string_view message)
 {
@@ -78,58 +67,6 @@ SmallString Host::TranslatePluralToSmallString(const char* context, const char* 
   return ret;
 }
 
-void Host::LoadSettings(SettingsInterface& si, std::unique_lock<std::mutex>& lock)
-{
-}
-
-void Host::CheckForSettingsChanges(const Settings& old_settings)
-{
-}
-
-void Host::CommitBaseSettingChanges()
-{
-}
-
-bool Host::ResourceFileExists(std::string_view filename, bool allow_override)
-{
-  return false;
-}
-
-std::optional<DynamicHeapArray<u8>> Host::ReadResourceFile(std::string_view filename, bool allow_override)
-{
-  return std::nullopt;
-}
-
-std::optional<std::string> Host::ReadResourceFileToString(std::string_view filename, bool allow_override)
-{
-  return std::nullopt;
-}
-
-std::optional<std::time_t> Host::GetResourceFileTimestamp(std::string_view filename, bool allow_override)
-{
-  return std::nullopt;
-}
-
-void Host::OnSystemStarting()
-{
-}
-
-void Host::OnSystemStarted()
-{
-}
-
-void Host::OnSystemDestroyed()
-{
-}
-
-void Host::OnSystemPaused()
-{
-}
-
-void Host::OnSystemResumed()
-{
-}
-
 void Host::OnIdleStateChanged()
 {
 }
@@ -150,15 +87,6 @@ void Host::OnMediaCaptureStopped()
 {
 }
 
-void Host::PumpMessagesOnCPUThread()
-{
-}
-
-void Host::RunOnCPUThread(std::function<void()> function, bool block /* = false */)
-{
-  function();
-}
-
 void Host::RequestResizeHostDisplay(s32 width, s32 height)
 {
 }
@@ -173,6 +101,7 @@ void Host::RequestExitBigPicture()
 
 void Host::RequestSystemShutdown(bool allow_confirm, bool save_state)
 {
+  Host::RunOnCPUThread([save_state]() { System::ShutdownSystem(save_state); });
 }
 
 bool Host::IsFullscreen()
@@ -181,19 +110,6 @@ bool Host::IsFullscreen()
 }
 
 void Host::SetFullscreen(bool enabled)
-{
-}
-
-std::optional<WindowInfo> Host::AcquireRenderWindow(bool recreate_window)
-{
-  return std::nullopt;
-}
-
-void Host::ReleaseRenderWindow()
-{
-}
-
-void Host::FrameDone()
 {
 }
 

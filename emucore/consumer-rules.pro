@@ -1,5 +1,3 @@
-# Native code finds these by name (FindClass / GetStaticMethodID / RegisterNatives),
-# so R8 must keep their names and members.
--keep class kr.co.iefriends.pcsx2.NativeApp { *; }
--keep class com.armsx2.BiosInfo { *; }
--keep class org.libsdl.app.** { *; }
+# Native code finds this by name (FindClass / GetStaticMethodID), so R8 must keep its name
+# and members.
+-keep class com.kira3.ametrine.emucore.NativeCore { *; }

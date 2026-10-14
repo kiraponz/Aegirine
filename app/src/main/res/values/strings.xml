@@ -13,7 +13,7 @@
     <string name="library_change_game_folder">Change game folder</string>
     <string name="library_more">More options</string>
     <string name="library_bios_missing">No BIOS selected</string>
-    <string name="library_bios_missing_summary">Games need a PS2 BIOS to start</string>
+    <string name="library_bios_missing_summary">Games need a PS1 BIOS to start</string>
     <string name="library_bios_set_up">Set up</string>
     <string name="library_message_scan_failed">Could not read the game folder</string>
     <string name="library_message_bios_required">Select a BIOS first</string>
@@ -24,11 +24,11 @@
     <string name="bios_empty">No BIOS added yet</string>
     <string name="bios_add">Add BIOS</string>
     <string name="bios_adding">Adding…</string>
-    <string name="bios_invalid">This file is not a PS2 BIOS</string>
+    <string name="bios_invalid">This file is not a PS1 BIOS</string>
     <string name="bios_delete">Delete</string>
     <string name="bios_delete_title">Delete %1$s?</string>
     <string name="bios_delete_text">The file is removed from the app. Games set to use it switch to the selected BIOS.</string>
-    <string name="bios_about">Add the BIOS dump from your own PS2. The selected BIOS is used by every game, unless the game\'s settings pick another one.</string>
+    <string name="bios_about">Add the BIOS dump from your own PS1. The selected BIOS is used by every game, unless the game\'s settings pick another one.</string>
     <string name="bios_region_japan">Japan</string>
     <string name="bios_region_usa">USA</string>
     <string name="bios_region_europe">Europe</string>
@@ -876,7 +876,7 @@
     <string name="about_title">About</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_description">A PS2 emulator for Android. Its emulation core is ARMSX2, an ARM64 fork of PCSX2.</string>
-    <string name="about_bios_note">Games need a BIOS dumped from your own PS2. Ametrine does not include any BIOS or games.</string>
+    <string name="about_bios_note">Games need a BIOS dumped from your own PS1. Ametrine does not include any BIOS or games.</string>
     <string name="about_source">Source code</string>
     <string name="about_core">Emulation core</string>
     <string name="about_core_summary">ARMSX2 at %1$s</string>

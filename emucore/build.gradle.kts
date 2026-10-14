@@ -43,7 +43,8 @@ android {
             externalNativeBuild { cmake { arguments += coreArgs("Release") } }
         }
         debug {
-            externalNativeBuild { cmake { arguments += coreArgs("Debug") } }
+            // Optimized: an unoptimized core runs games far below full speed.
+            externalNativeBuild { cmake { arguments += coreArgs("RelWithDebInfo") } }
         }
     }
 
@@ -52,6 +53,15 @@ android {
             path = File(coreDir, "CMakeLists.txt")
             version = "3.31.6"
         }
+    }
+
+    sourceSets {
+        // assets/resources: the core's shaders, fonts and databases. CoreResources copies them
+        // out to plain files at the first launch. Also puts the core's data/LICENSE.txt at the
+        // root of the assets.
+        getByName("main").assets.directories.add(File(coreDir, "data").path)
+        // Filled by the coreJniLibs task below.
+        getByName("main").jniLibs.directories.add(layout.buildDirectory.dir("generated/coreJniLibs").get().asFile.path)
     }
 
     compileOptions {
@@ -75,6 +85,17 @@ tasks.matching { it.name.startsWith("configureCMake") }.configureEach {
         }
     }
 }
+
+// The core opens shaderc and SPIRV-Cross with dlopen rather than linking them, so CMake does not
+// package them; they go in as prebuilt native libraries.
+val coreJniLibs = tasks.register<Sync>("coreJniLibs") {
+    from(File(coreDepsDir, "lib")) {
+        include("libshaderc_shared.so", "libspirv-cross-c-shared.so")
+    }
+    into(layout.buildDirectory.dir("generated/coreJniLibs/arm64-v8a"))
+}
+
+tasks.named("preBuild") { dependsOn(coreJniLibs) }
 
 dependencies {
     api(libs.kotlinx.coroutines.android)
