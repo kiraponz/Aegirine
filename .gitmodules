@@ -1,0 +1,3 @@
+[submodule "external/aegirine-core"]
+	path = external/aegirine-core
+	url = https://github.com/kiraponz/aegirine-core.git
