@@ -1,6 +1,6 @@
-// The Android frontend's side of the core: the CPU thread, the render window and the base
-// settings layer. jni.cpp drives it from Kotlin; android_host.cpp implements it together with
-// the Host:: functions the core calls back into.
+// The Android frontend's side of the core: the CPU thread, the render window, the base
+// settings layer and the pads. jni.cpp drives it from Kotlin; android_host.cpp implements it
+// together with the Host:: functions the core calls back into.
 
 #pragma once
 
@@ -40,5 +40,14 @@ void CommitSettings();
 /// until the CPU thread has let go of the previous window.
 void SetWindow(ANativeWindow* window, u32 width, u32 height);
 void SetDisplayRefreshRate(float hz);
+
+/// Sets bind [index] of the controller in [port] to [value] (0..1): one of AnalogController's
+/// buttons, or one of its half axes after them. Ignored with no system running.
+void SetPadBind(u32 port, u32 index, float value);
+
+/// Moves the left or right stick of the controller in [port] to ([x], [y]), each -1..1 with +y down.
+void SetPadStick(u32 port, bool right, float x, float y);
+
+void SetFastForward(bool enabled);
 
 } // namespace AndroidHost

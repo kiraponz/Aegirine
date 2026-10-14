@@ -7,7 +7,6 @@
 #include "core/host.h"
 #include "core/system.h"
 
-#include "util/audio_stream.h"
 #include "util/gpu_device.h"
 #include "util/http_downloader.h"
 #include "util/imgui_fullscreen.h"
@@ -196,21 +195,6 @@ void Host::RefreshGameListAsync(bool invalidate_cache)
 
 void Host::CancelGameListRefresh()
 {
-}
-
-std::unique_ptr<AudioStream> AudioStream::CreateAAudioAudioStream(u32 sample_rate,
-                                                                const AudioStreamParameters& parameters, Error* error)
-{
-  Error::SetStringView(error, "No audio output yet");
-  return nullptr;
-}
-
-std::unique_ptr<AudioStream> AudioStream::CreateOpenSLESAudioStream(u32 sample_rate,
-                                                                  const AudioStreamParameters& parameters,
-                                                                  Error* error)
-{
-  Error::SetStringView(error, "No audio output yet");
-  return nullptr;
 }
 
 std::unique_ptr<InputSource> InputSource::CreateAndroidSource()

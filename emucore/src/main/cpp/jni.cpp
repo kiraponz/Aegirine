@@ -125,6 +125,22 @@ extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setDisplayRefreshRate)(JNIEnv*, jc
   AndroidHost::SetDisplayRefreshRate(hz);
 }
 
+extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setPadBind)(JNIEnv*, jclass, jint port, jint index, jfloat value)
+{
+  AndroidHost::SetPadBind(static_cast<u32>(port), static_cast<u32>(index), value);
+}
+
+extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setPadStick)(JNIEnv*, jclass, jint port, jboolean right, jfloat x,
+                                                           jfloat y)
+{
+  AndroidHost::SetPadStick(static_cast<u32>(port), right, x, y);
+}
+
+extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setFastForward)(JNIEnv*, jclass, jboolean enabled)
+{
+  AndroidHost::SetFastForward(enabled);
+}
+
 extern "C" JNIEXPORT jfloat JNICALL NATIVE_CORE(getFps)(JNIEnv*, jclass)
 {
   return AndroidHost::HasActiveSystem() ? System::GetFPS() : 0.0f;

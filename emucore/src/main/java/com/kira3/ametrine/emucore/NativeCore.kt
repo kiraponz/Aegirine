@@ -42,6 +42,7 @@ internal object NativeCore {
 
     interface Listener {
         fun onVmPausedChanged(paused: Boolean)
+        fun onPadRumble(pad: Int, largeMotor: Int, smallMotor: Int)
     }
 
     // ---- Setup ----
@@ -74,6 +75,15 @@ internal object NativeCore {
     @JvmStatic external fun resume()
     @JvmStatic external fun shutdown()
 
+    // ---- Input and speed ----
+
+    /** Sets bind [index] (a [PadButton.code], or a half axis after them) of the pad in [port] to [value] (0..1). */
+    @JvmStatic external fun setPadBind(port: Int, index: Int, value: Float)
+
+    /** Moves the left or [right] stick of the pad in [port] to ([x], [y]), each -1..1 with +y down. */
+    @JvmStatic external fun setPadStick(port: Int, right: Boolean, x: Float, y: Float)
+    @JvmStatic external fun setFastForward(enabled: Boolean)
+
     // ---- Info ----
 
     @JvmStatic external fun getFps(): Float
@@ -92,5 +102,12 @@ internal object NativeCore {
     fun onVmPausedChanged(paused: Boolean) {
         runCatching { listener?.onVmPausedChanged(paused) }
             .onFailure { Log.e(TAG, "onVmPausedChanged", it) }
+    }
+
+    /** The game set [pad]'s motors (0..255 each); zeros when it stops them or the VM pauses. */
+    @JvmStatic
+    fun onPadRumble(pad: Int, largeMotor: Int, smallMotor: Int) {
+        runCatching { listener?.onPadRumble(pad, largeMotor, smallMotor) }
+            .onFailure { Log.e(TAG, "onPadRumble", it) }
     }
 }

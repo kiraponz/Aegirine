@@ -1,13 +1,17 @@
-// The CPU thread, the render window and the settings, and the Host:: functions that go with
-// them. The remaining Host:: functions are still placeholders in host_stubs.cpp.
+// The CPU thread, the render window, the settings and the pads, and the Host:: functions that
+// go with them. The remaining Host:: functions are still placeholders in host_stubs.cpp.
 
 #include "android_host.h"
 
+#include "core/analog_controller.h"
+#include "core/controller.h"
 #include "core/host.h"
+#include "core/pad.h"
 #include "core/settings.h"
 #include "core/system.h"
 
 #include "util/gpu_device.h"
+#include "util/input_manager.h"
 #include "util/window_info.h"
 
 #include "common/error.h"
@@ -17,6 +21,9 @@
 #include "common/path.h"
 
 #include <android/native_window.h>
+
+#include <algorithm>
+#include <array>
 
 #include <atomic>
 #include <chrono>
@@ -31,11 +38,16 @@ Log_SetChannel(AndroidHost);
 namespace AndroidHost {
 static JNIEnv* GetJNIEnv();
 static void CallVoidCallback(jmethodID method, jboolean arg);
+static void OnPadVibration(u32 pad_index, float large_motor, float small_motor);
+static void SendPadVibration(u32 pad_index, u8 large_motor, u8 small_motor);
+static void StopPadVibration();
+static void RestorePadVibration();
 static std::string GetResourcePath(std::string_view filename, bool allow_override);
 
 static JavaVM* s_java_vm = nullptr;
 static jclass s_native_core = nullptr;
 static jmethodID s_on_vm_paused_changed = nullptr;
+static jmethodID s_on_pad_rumble = nullptr;
 
 static MemorySettingsInterface s_base_settings;
 
@@ -49,6 +61,10 @@ static std::deque<std::function<void()>> s_queue;
 static bool s_cpu_thread_running = false;
 
 static std::atomic_bool s_system_active{false};
+
+// What the game last set each pad's motors to (0..255), so a resume can start them again.
+// CPU thread only.
+static std::array<std::array<u8, 2>, NUM_CONTROLLER_AND_CARD_PORTS> s_pad_vibration = {};
 
 // The window the GPU device renders to. We hold a reference to it until the device has
 // switched to another one, so it stays valid however late the CPU thread gets to the switch.
@@ -70,6 +86,7 @@ void AndroidHost::SetJavaVM(JavaVM* vm, jclass native_core)
 
   JNIEnv* env = GetJNIEnv();
   s_on_vm_paused_changed = env->GetStaticMethodID(native_core, "onVmPausedChanged", "(Z)V");
+  s_on_pad_rumble = env->GetStaticMethodID(native_core, "onPadRumble", "(III)V");
 }
 
 JNIEnv* AndroidHost::GetJNIEnv()
@@ -118,9 +135,9 @@ bool AndroidHost::Initialize(const std::string& data_dir, Error* error)
     // There is no Android input source: the app drives the pads directly.
     s_base_settings.SetBoolValue("InputSources", "Android", false);
 
-    // TODO: AAudio (step 3).
-    s_base_settings.SetStringValue("Audio", "Backend", "Null");
   }
+
+  InputManager::SetPadVibrationCallback(&OnPadVibration);
 
   if (!EmuFolders::EnsureFoldersExist())
     WARNING_LOG("Could not create every folder under {}", data_dir);
@@ -239,6 +256,107 @@ void AndroidHost::SetDisplayRefreshRate(float hz)
   s_refresh_rate = hz;
 }
 
+void AndroidHost::SetPadBind(u32 port, u32 index, float value)
+{
+  if (!s_system_active.load() || port >= NUM_CONTROLLER_AND_CARD_PORTS)
+    return;
+
+  Host::RunOnCPUThread([port, index, value]() {
+    if (Controller* controller = Pad::GetController(port))
+      controller->SetBindState(index, value);
+  });
+}
+
+void AndroidHost::SetPadStick(u32 port, bool right, float x, float y)
+{
+  if (!s_system_active.load() || port >= NUM_CONTROLLER_AND_CARD_PORTS)
+    return;
+
+  using HalfAxis = AnalogController::HalfAxis;
+  static constexpr u32 FIRST = static_cast<u32>(AnalogController::Button::Count);
+  const u32 left_axis = FIRST + static_cast<u32>(right ? HalfAxis::RLeft : HalfAxis::LLeft);
+  const u32 right_axis = FIRST + static_cast<u32>(right ? HalfAxis::RRight : HalfAxis::LRight);
+  const u32 down_axis = FIRST + static_cast<u32>(right ? HalfAxis::RDown : HalfAxis::LDown);
+  const u32 up_axis = FIRST + static_cast<u32>(right ? HalfAxis::RUp : HalfAxis::LUp);
+
+  Host::RunOnCPUThread([=]() {
+    Controller* controller = Pad::GetController(port);
+    if (!controller)
+      return;
+
+    // Release the opposite direction first, so the axis never has both halves set.
+    if (x >= 0.0f)
+    {
+      controller->SetBindState(left_axis, 0.0f);
+      controller->SetBindState(right_axis, std::min(x, 1.0f));
+    }
+    else
+    {
+      controller->SetBindState(right_axis, 0.0f);
+      controller->SetBindState(left_axis, std::min(-x, 1.0f));
+    }
+    if (y >= 0.0f)
+    {
+      controller->SetBindState(up_axis, 0.0f);
+      controller->SetBindState(down_axis, std::min(y, 1.0f));
+    }
+    else
+    {
+      controller->SetBindState(down_axis, 0.0f);
+      controller->SetBindState(up_axis, std::min(-y, 1.0f));
+    }
+  });
+}
+
+void AndroidHost::SetFastForward(bool enabled)
+{
+  Host::RunOnCPUThread([enabled]() { System::SetFastForwardEnabled(enabled); });
+}
+
+void AndroidHost::OnPadVibration(u32 pad_index, float large_motor, float small_motor)
+{
+  if (pad_index >= s_pad_vibration.size())
+    return;
+
+  const u8 large = static_cast<u8>(std::clamp(large_motor, 0.0f, 1.0f) * 255.0f);
+  const u8 small = static_cast<u8>(std::clamp(small_motor, 0.0f, 1.0f) * 255.0f);
+  if (s_pad_vibration[pad_index][0] == large && s_pad_vibration[pad_index][1] == small)
+    return;
+
+  s_pad_vibration[pad_index] = {large, small};
+  SendPadVibration(pad_index, large, small);
+}
+
+void AndroidHost::SendPadVibration(u32 pad_index, u8 large_motor, u8 small_motor)
+{
+  JNIEnv* env = GetJNIEnv();
+  env->CallStaticVoidMethod(s_native_core, s_on_pad_rumble, static_cast<jint>(pad_index),
+                            static_cast<jint>(large_motor), static_cast<jint>(small_motor));
+  if (env->ExceptionCheck())
+  {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+  }
+}
+
+void AndroidHost::StopPadVibration()
+{
+  for (u32 i = 0; i < s_pad_vibration.size(); i++)
+  {
+    if (s_pad_vibration[i][0] != 0 || s_pad_vibration[i][1] != 0)
+      SendPadVibration(i, 0, 0);
+  }
+}
+
+void AndroidHost::RestorePadVibration()
+{
+  for (u32 i = 0; i < s_pad_vibration.size(); i++)
+  {
+    if (s_pad_vibration[i][0] != 0 || s_pad_vibration[i][1] != 0)
+      SendPadVibration(i, s_pad_vibration[i][0], s_pad_vibration[i][1]);
+  }
+}
+
 std::string AndroidHost::GetResourcePath(std::string_view filename, bool allow_override)
 {
   return allow_override ? EmuFolders::GetOverridableResourcePath(filename) :
@@ -319,15 +437,19 @@ void Host::OnSystemStarted()
 void Host::OnSystemDestroyed()
 {
   AndroidHost::s_system_active.store(false);
+  AndroidHost::StopPadVibration();
+  AndroidHost::s_pad_vibration = {};
 }
 
 void Host::OnSystemPaused()
 {
+  AndroidHost::StopPadVibration();
   AndroidHost::CallVoidCallback(AndroidHost::s_on_vm_paused_changed, JNI_TRUE);
 }
 
 void Host::OnSystemResumed()
 {
+  AndroidHost::RestorePadVibration();
   AndroidHost::CallVoidCallback(AndroidHost::s_on_vm_paused_changed, JNI_FALSE);
 }
 

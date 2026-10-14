@@ -56,7 +56,10 @@ class EmulatorCore(context: Context) {
     private val _vmState = MutableStateFlow(VmState.Stopped)
     val vmState: StateFlow<VmState> = _vmState.asStateFlow()
 
-    /** Called from a core thread when the game drives a pad's motors (0..255 each). Step 3. */
+    /**
+     * Called on the CPU thread when the game drives a pad's motors (0..255 each). Zeros when the
+     * game stops them, and when the VM pauses or stops; a resume sends the levels again.
+     */
     @Volatile
     var rumbleHandler: ((pad: Int, largeMotor: Int, smallMotor: Int) -> Unit)? = null
 
@@ -81,6 +84,10 @@ class EmulatorCore(context: Context) {
                     val next = if (paused) VmState.Paused else VmState.Running
                     // A late callback after the VM stopped must not revive it.
                     _vmState.update { if (it == VmState.Stopped) it else next }
+                }
+
+                override fun onPadRumble(pad: Int, largeMotor: Int, smallMotor: Int) {
+                    rumbleHandler?.invoke(pad, largeMotor, smallMotor)
                 }
             }
             NativeCore.initialize(dataDir.absolutePath)?.let { error ->
@@ -133,7 +140,8 @@ class EmulatorCore(context: Context) {
      * while a game runs.
      *
      * The settings are still ARMSX2's; until they are remade for the core (step 5), only the
-     * renderer is passed on, and it applies on the next boot.
+     * renderer, the speeds and the audio output are passed on. The renderer applies on the next
+     * boot; the rest straight away.
      */
     suspend fun applySettings(
         global: EmulatorSettings,
@@ -142,7 +150,25 @@ class EmulatorCore(context: Context) {
     ) = withContext(Dispatchers.IO) {
         applyMutex.withLock {
             val effective = SettingsJson.merge(global, overrides)
-            setSetting("GPU", "Renderer", rendererName(effective.output.renderer))
+            val running = NativeCore.hasActiveSystem()
+            // The running VM keeps the renderer it booted with.
+            if (!running) setSetting("GPU", "Renderer", rendererName(effective.output.renderer))
+
+            val frameLimit = effective.frameLimit
+            val speed = if (frameLimit.frameLimitEnable) frameLimit.nominalSpeedPercent.coerceIn(10, 1000) / 100f else 0f
+            setSetting("Main", "EmulationSpeed", speed)
+            // 0 is as fast as possible, the same as the core's.
+            setSetting("Main", "FastForwardSpeed", frameLimit.fastForwardSpeed.coerceIn(0, 10).toFloat())
+
+            val audio = effective.audio
+            setSetting("Audio", "OutputVolume", audio.audioVolume.coerceIn(0, 200))
+            setSetting("Audio", "FastForwardVolume", audio.audioFastForwardVolume.coerceIn(0, 200))
+            setSetting("Audio", "OutputMuted", audio.audioMuted)
+            setSetting("Audio", "StretchMode", if (audio.audioTimeStretch) "TimeStretch" else "Off")
+            setSetting("Audio", "BufferMS", audio.audioBufferMs.coerceIn(10, 500))
+            setSetting("Audio", "OutputLatencyMS", audio.audioOutputLatencyMs.coerceIn(0, 500))
+
+            if (running) commitSettings()
             lastApplied = effective
         }
     }
@@ -162,9 +188,11 @@ class EmulatorCore(context: Context) {
     /** True while the running game is fast-forwarded. Every boot starts at normal speed. */
     val fastForward: StateFlow<Boolean> = _fastForward.asStateFlow()
 
-    /** Fast-forwards the running game, or returns it to normal speed. Step 3. */
+    /** Fast-forwards the running game, or returns it to normal speed. */
     fun setFastForward(on: Boolean) {
+        if (!NativeCore.hasActiveSystem()) return
         _fastForward.value = on
+        NativeCore.setFastForward(on)
     }
 
     // ---- BIOS and games ----
@@ -266,7 +294,10 @@ class EmulatorCore(context: Context) {
 
     val hasActiveVm: Boolean get() = NativeCore.hasActiveSystem()
 
-    /** From the activity's onStop (true) and onStart (false). Step 3. */
+    /**
+     * From the activity's onStop (true) and onStart (false). Nothing to do for this core: the
+     * activity pauses the VM while hidden, and a pause stops the audio and the rumble.
+     */
     @Suppress("UNUSED_PARAMETER")
     fun setAppBackgrounded(backgrounded: Boolean) = Unit
 
@@ -382,18 +413,21 @@ class EmulatorCore(context: Context) {
 
     /**
      * Presses or releases [button] on [port] (0 = player 1). [pressure] (0..1) is how hard a
-     * pressed button is pushed. Step 3.
+     * pressed button is pushed; a PS1 pad does not sense it, so only [pressed] reaches the game.
      */
     fun setPadButton(port: Int, button: PadButton, pressed: Boolean, pressure: Float = 1f) {
         padListener?.onButton(port, button, pressed, pressure)
+        NativeCore.setPadBind(port, button.code, if (pressed) 1f else 0f)
     }
 
     /**
      * Moves [stick] on [port] to ([x], [y]), each -1..1 with +x right and +y down. Shape the
-     * input (deadzone) before calling; this sends it as is. Step 3.
+     * input (deadzone) before calling; this sends it as is. The game only reads the sticks once
+     * the pad is in analog mode ([PadButton.Analog]).
      */
     fun setPadStick(port: Int, stick: PadStick, x: Float, y: Float) {
         padListener?.onStick(port, stick, x, y)
+        NativeCore.setPadStick(port, stick == PadStick.Right, x, y)
     }
 
     companion object {
