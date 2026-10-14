@@ -204,14 +204,15 @@ class LibraryRepository(
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, pending.removeFirst())
             val cursor = contentResolver.query(children, PROJECTION, null, null, null)
                 ?: throw IllegalStateException("Could not list $children")
+            val found = mutableListOf<GameEntity>()
             cursor.use {
                 while (it.moveToNext()) {
                     val id = it.getString(0) ?: continue
                     val name = it.getString(1) ?: continue
                     if (it.getString(2) == Document.MIME_TYPE_DIR) {
                         pending.add(id)
-                    } else if (name.substringAfterLast('.', "").lowercase() in GAME_EXTENSIONS) {
-                        games += GameEntity(
+                    } else if (extensionOf(name) in GAME_EXTENSIONS) {
+                        found += GameEntity(
                             uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id).toString(),
                             fileName = name,
                             sizeBytes = it.getLong(3),
@@ -220,6 +221,10 @@ class LibraryRepository(
                     }
                 }
             }
+            // A cue sheet's tracks are not games of their own. Their names need not match the
+            // sheet's, so a folder with a cue sheet lists none of its raw images.
+            if (found.any { extensionOf(it.fileName) == "cue" }) found.removeAll { extensionOf(it.fileName) in TRACK_EXTENSIONS }
+            games += found
         }
         return games
     }
@@ -243,7 +248,15 @@ class LibraryRepository(
             Document.COLUMN_LAST_MODIFIED,
         )
 
-        // Disc images the core opens directly. (.bin/.cue sets are left out for now.)
-        val GAME_EXTENSIONS = setOf("iso", "chd", "cso", "zso", "gz", "elf")
+        /** What the core boots: disc images, playlists (.m3u), PS-EXEs and PSFs. */
+        val GAME_EXTENSIONS = setOf(
+            "cue", "bin", "img", "iso", "chd", "pbp", "ecm", "mds", "m3u",
+            "exe", "psexe", "ps-exe", "psf", "minipsf",
+        )
+
+        /** Raw images that are usually a cue sheet's tracks. */
+        val TRACK_EXTENSIONS = setOf("bin", "img")
+
+        fun extensionOf(fileName: String): String = fileName.substringAfterLast('.', "").lowercase()
     }
 }

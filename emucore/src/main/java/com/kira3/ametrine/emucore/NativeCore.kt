@@ -40,6 +40,11 @@ internal object NativeCore {
     @JvmStatic
     var listener: Listener? = null
 
+    /** Opens the core's /saf/ paths. Set by EmulatorCore before [initialize]. */
+    @Volatile
+    @JvmStatic
+    var files: SafFiles? = null
+
     interface Listener {
         fun onVmPausedChanged(paused: Boolean)
         fun onPadRumble(pad: Int, largeMotor: Int, smallMotor: Int)
@@ -89,6 +94,12 @@ internal object NativeCore {
     @JvmStatic external fun getFps(): Float
     @JvmStatic external fun getFrameNumber(): Long
 
+    /** The disc's serial (e.g. "SLUS-00067"), or null if the core cannot read one from [path]. */
+    @JvmStatic external fun getGameSerial(path: String): String?
+
+    /** The GameDB's title for [serial], or null. */
+    @JvmStatic external fun getGameDbTitle(serial: String): String?
+
     /**
      * "<region>\t<description>" for a PS1 BIOS image, or null. The region is 1 NTSC-J,
      * 2 NTSC-U, 3 PAL, or -1 for an image the core does not know. Takes ownership of [fd].
@@ -103,6 +114,18 @@ internal object NativeCore {
         runCatching { listener?.onVmPausedChanged(paused) }
             .onFailure { Log.e(TAG, "onVmPausedChanged", it) }
     }
+
+    @JvmStatic
+    fun safOpen(path: String): Int = runCatching { files?.open(path) }
+        .onFailure { Log.e(TAG, "safOpen", it) }.getOrNull() ?: -1
+
+    @JvmStatic
+    fun safStat(path: String): LongArray? = runCatching { files?.stat(path) }
+        .onFailure { Log.e(TAG, "safStat", it) }.getOrNull()
+
+    @JvmStatic
+    fun safList(path: String): Array<String>? = runCatching { files?.list(path) }
+        .onFailure { Log.e(TAG, "safList", it) }.getOrNull()
 
     /** The game set [pad]'s motors (0..255 each); zeros when it stops them or the VM pauses. */
     @JvmStatic

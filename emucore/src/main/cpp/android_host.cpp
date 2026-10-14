@@ -1,5 +1,5 @@
-// The CPU thread, the render window, the settings and the pads, and the Host:: functions that
-// go with them. The remaining Host:: functions are still placeholders in host_stubs.cpp.
+// The CPU thread, the render window, the settings, the pads and the SAF files, and the Host::
+// functions that go with them. The remaining Host:: functions are still placeholders in host_stubs.cpp.
 
 #include "android_host.h"
 
@@ -19,6 +19,7 @@
 #include "common/log.h"
 #include "common/memory_settings_interface.h"
 #include "common/path.h"
+#include "common/string_util.h"
 
 #include <android/native_window.h>
 
@@ -48,6 +49,21 @@ static JavaVM* s_java_vm = nullptr;
 static jclass s_native_core = nullptr;
 static jmethodID s_on_vm_paused_changed = nullptr;
 static jmethodID s_on_pad_rumble = nullptr;
+static jmethodID s_saf_open = nullptr;
+static jmethodID s_saf_stat = nullptr;
+static jmethodID s_saf_list = nullptr;
+
+/// The core's /saf/ paths, which NativeCore (SafFiles.kt) turns into SAF documents.
+class SafFileProvider final : public FileSystem::VirtualFileProvider
+{
+public:
+  bool IsVirtualPath(std::string_view path) const override;
+  int OpenFD(const char* path, Error* error) override;
+  bool StatFile(const char* path, FILESYSTEM_STAT_DATA* sd) override;
+  bool ListDirectory(const char* path, FileSystem::FindResultsArray* results) override;
+};
+
+static SafFileProvider s_saf_file_provider;
 
 static MemorySettingsInterface s_base_settings;
 
@@ -87,6 +103,9 @@ void AndroidHost::SetJavaVM(JavaVM* vm, jclass native_core)
   JNIEnv* env = GetJNIEnv();
   s_on_vm_paused_changed = env->GetStaticMethodID(native_core, "onVmPausedChanged", "(Z)V");
   s_on_pad_rumble = env->GetStaticMethodID(native_core, "onPadRumble", "(III)V");
+  s_saf_open = env->GetStaticMethodID(native_core, "safOpen", "(Ljava/lang/String;)I");
+  s_saf_stat = env->GetStaticMethodID(native_core, "safStat", "(Ljava/lang/String;)[J");
+  s_saf_list = env->GetStaticMethodID(native_core, "safList", "(Ljava/lang/String;)[Ljava/lang/String;");
 }
 
 JNIEnv* AndroidHost::GetJNIEnv()
@@ -138,6 +157,7 @@ bool AndroidHost::Initialize(const std::string& data_dir, Error* error)
   }
 
   InputManager::SetPadVibrationCallback(&OnPadVibration);
+  FileSystem::SetVirtualFileProvider(&s_saf_file_provider);
 
   if (!EmuFolders::EnsureFoldersExist())
     WARNING_LOG("Could not create every folder under {}", data_dir);
@@ -355,6 +375,94 @@ void AndroidHost::RestorePadVibration()
     if (s_pad_vibration[i][0] != 0 || s_pad_vibration[i][1] != 0)
       SendPadVibration(i, s_pad_vibration[i][0], s_pad_vibration[i][1]);
   }
+}
+
+bool AndroidHost::SafFileProvider::IsVirtualPath(std::string_view path) const
+{
+  return path.starts_with("/saf/");
+}
+
+int AndroidHost::SafFileProvider::OpenFD(const char* path, Error* error)
+{
+  JNIEnv* env = GetJNIEnv();
+  jstring jpath = env->NewStringUTF(path);
+  const jint fd = env->CallStaticIntMethod(s_native_core, s_saf_open, jpath);
+  env->DeleteLocalRef(jpath);
+  if (env->ExceptionCheck())
+  {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    Error::SetErrno(error, EIO);
+    return -1;
+  }
+
+  if (fd < 0)
+    Error::SetErrno(error, ENOENT);
+  return fd;
+}
+
+bool AndroidHost::SafFileProvider::StatFile(const char* path, FILESYSTEM_STAT_DATA* sd)
+{
+  JNIEnv* env = GetJNIEnv();
+  jstring jpath = env->NewStringUTF(path);
+  jlongArray result = static_cast<jlongArray>(env->CallStaticObjectMethod(s_native_core, s_saf_stat, jpath));
+  env->DeleteLocalRef(jpath);
+  if (env->ExceptionCheck())
+  {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    return false;
+  }
+  if (!result)
+    return false;
+
+  // [size, modified, is folder]
+  jlong values[3] = {};
+  env->GetLongArrayRegion(result, 0, 3, values);
+  env->DeleteLocalRef(result);
+  sd->Size = values[0];
+  sd->ModificationTime = static_cast<std::time_t>(values[1]);
+  sd->CreationTime = sd->ModificationTime;
+  sd->Attributes = (values[2] != 0) ? FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY : 0;
+  return true;
+}
+
+bool AndroidHost::SafFileProvider::ListDirectory(const char* path, FileSystem::FindResultsArray* results)
+{
+  JNIEnv* env = GetJNIEnv();
+  jstring jpath = env->NewStringUTF(path);
+  jobjectArray entries = static_cast<jobjectArray>(env->CallStaticObjectMethod(s_native_core, s_saf_list, jpath));
+  env->DeleteLocalRef(jpath);
+  if (env->ExceptionCheck())
+  {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    return false;
+  }
+  if (!entries)
+    return false;
+
+  // Each "name\tis folder\tsize\tmodified".
+  const jsize count = env->GetArrayLength(entries);
+  for (jsize i = 0; i < count; i++)
+  {
+    jstring jentry = static_cast<jstring>(env->GetObjectArrayElement(entries, i));
+    const char* chars = env->GetStringUTFChars(jentry, nullptr);
+    const std::vector<std::string_view> fields = StringUtil::SplitString(chars, '\t', false);
+    if (fields.size() == 4)
+    {
+      FILESYSTEM_FIND_DATA& fd = results->emplace_back();
+      fd.FileName = fields[0];
+      fd.Attributes = (fields[1] == "1") ? FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY : 0;
+      fd.Size = StringUtil::FromChars<s64>(fields[2]).value_or(0);
+      fd.ModificationTime = static_cast<std::time_t>(StringUtil::FromChars<s64>(fields[3]).value_or(0));
+      fd.CreationTime = fd.ModificationTime;
+    }
+    env->ReleaseStringUTFChars(jentry, chars);
+    env->DeleteLocalRef(jentry);
+  }
+  env->DeleteLocalRef(entries);
+  return true;
 }
 
 std::string AndroidHost::GetResourcePath(std::string_view filename, bool allow_override)

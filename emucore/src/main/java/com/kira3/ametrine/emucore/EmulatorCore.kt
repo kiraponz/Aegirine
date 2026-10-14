@@ -63,6 +63,9 @@ class EmulatorCore(context: Context) {
     @Volatile
     var rumbleHandler: ((pad: Int, largeMotor: Int, smallMotor: Int) -> Unit)? = null
 
+    /** Opens the games for the core, which only takes paths. */
+    private val files = SafFiles(appContext.contentResolver)
+
     private val initMutex = Mutex()
     private var initialized = false
 
@@ -79,6 +82,7 @@ class EmulatorCore(context: Context) {
             biosDir.mkdirs()
             CoreResources.install(appContext, dataDir)
 
+            NativeCore.files = files
             NativeCore.listener = object : NativeCore.Listener {
                 override fun onVmPausedChanged(paused: Boolean) {
                     val next = if (paused) VmState.Paused else VmState.Running
@@ -224,13 +228,17 @@ class EmulatorCore(context: Context) {
         )
     }
 
-    /** Reads the serial (e.g. "SLUS-00067") from a disc image, or null if it can't. Blocking I/O. Step 4. */
-    @Suppress("UNUSED_PARAMETER")
-    fun readGameSerial(uri: Uri): String? = null
+    /**
+     * Reads the serial (e.g. "SLUS-00067") from a disc image, or null if it can't. The GameDB's
+     * serial when it knows the disc. Needs [initialize]. Blocking I/O.
+     */
+    fun readGameSerial(uri: Uri): String? {
+        val path = files.pathFor(uri) ?: return null
+        return NativeCore.getGameSerial(path)
+    }
 
-    /** The GameDB's name for [serial], or null when the database doesn't know it. Step 4. */
-    @Suppress("UNUSED_PARAMETER")
-    fun gameDbTitle(serial: String): String? = null
+    /** The GameDB's name for [serial], or null when the database doesn't know it. Needs [initialize]. */
+    fun gameDbTitle(serial: String): String? = NativeCore.getGameDbTitle(serial)
 
     /**
      * Writes [serial]'s cheats where the core reads them and turns on the ones that are
@@ -270,17 +278,19 @@ class EmulatorCore(context: Context) {
      * alone) and runs it until the VM shuts down. Blocks; call it on a dedicated emulation
      * thread.
      *
+     * A game from a SAF tree can reach the files beside it (a .cue's tracks, .sbi and .ppf files);
+     * one opened on its own cannot.
+     *
      * Returns null when the game ran and exited normally, or the reason it failed to boot.
      */
     fun runVm(gameUri: String): String? {
         check(initialized) { "EmulatorCore.initialize() has not completed" }
-        // TODO(step 4): games, through SAF.
-        if (gameUri.isNotEmpty()) return "Starting games is not supported yet; only the BIOS can be started"
+        val path = if (gameUri.isEmpty()) "" else files.pathFor(Uri.parse(gameUri)) ?: return "Could not open the game file"
         _vmState.value = VmState.Starting
         // The core boots at the speed the settings give it.
         _fastForward.value = false
         return try {
-            NativeCore.runSystem(gameUri)
+            NativeCore.runSystem(path)
         } finally {
             _vmState.value = VmState.Stopped
         }

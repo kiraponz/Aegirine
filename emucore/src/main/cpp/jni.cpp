@@ -3,7 +3,10 @@
 #include "android_host.h"
 
 #include "core/bios.h"
+#include "core/game_database.h"
 #include "core/system.h"
+
+#include "util/cd_image.h"
 
 #include "common/error.h"
 #include "common/log.h"
@@ -149,6 +152,37 @@ extern "C" JNIEXPORT jfloat JNICALL NATIVE_CORE(getFps)(JNIEnv*, jclass)
 extern "C" JNIEXPORT jlong JNICALL NATIVE_CORE(getFrameNumber)(JNIEnv*, jclass)
 {
   return AndroidHost::HasActiveSystem() ? System::GetFrameNumber() : 0;
+}
+
+extern "C" JNIEXPORT jstring JNICALL NATIVE_CORE(getGameSerial)(JNIEnv* env, jclass, jstring jpath)
+{
+  const std::string path = ToString(env, jpath);
+  // A PS-EXE or PSF has no disc to read a serial from.
+  if (System::IsExeFileName(path) || System::IsPsfFileName(path))
+    return nullptr;
+
+  Error error;
+  std::unique_ptr<CDImage> image = CDImage::Open(path.c_str(), false, &error);
+  if (!image)
+  {
+    WARNING_LOG("Could not open {}: {}", path, error.GetDescription());
+    return nullptr;
+  }
+
+  // The database's serial where it knows the disc; it also knows games by hash.
+  std::string id;
+  System::GameHash hash;
+  System::GetGameDetailsFromImage(image.get(), &id, &hash);
+  if (const GameDatabase::Entry* entry = GameDatabase::GetEntryForGameDetails(id, hash))
+    return env->NewStringUTF(entry->serial.c_str());
+
+  return id.empty() ? nullptr : env->NewStringUTF(id.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL NATIVE_CORE(getGameDbTitle)(JNIEnv* env, jclass, jstring serial)
+{
+  const GameDatabase::Entry* entry = GameDatabase::GetEntryForSerial(ToString(env, serial));
+  return entry ? env->NewStringUTF(entry->title.c_str()) : nullptr;
 }
 
 /// "<region>\t<description>" for a 512 KiB PS1 BIOS image, or null. region is the core's
