@@ -3,6 +3,8 @@ package com.kira3.ametrine.emulation
 import android.net.Uri
 import android.text.format.DateUtils
 import androidx.compose.foundation.Image
+import com.kira3.ametrine.ui.components.DiscItem
+import com.kira3.ametrine.ui.components.DiscSheet
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -224,28 +226,15 @@ fun InGameMenu(
     }
 
     if (choosingDisc) {
-        AlertDialog(
-            onDismissRequest = { choosingDisc = false },
-            title = { Text(stringResource(R.string.menu_change_disc)) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    discs.forEach { disc ->
-                        ListItem(
-                            headlineContent = { Text(disc.title, maxLines = 4) },
-                            leadingContent = { RadioButton(selected = disc.current, onClick = null) },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier.selectable(selected = disc.current, role = Role.RadioButton) {
-                                choosingDisc = false
-                                if (!disc.current) actions.changeDisc(disc)
-                            },
-                        )
-                    }
-                }
+        DiscSheet(
+            title = stringResource(R.string.menu_change_disc),
+            discs = discs.mapIndexed { i, disc -> DiscItem(i + 1, disc.title, disc.current) },
+            currentLabel = stringResource(R.string.menu_disc_now_playing),
+            onPick = {
+                choosingDisc = false
+                if (!discs[it].current) actions.changeDisc(discs[it])
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { choosingDisc = false }) { Text(stringResource(R.string.menu_cancel)) }
-            },
+            onDismiss = { choosingDisc = false },
         )
     }
 

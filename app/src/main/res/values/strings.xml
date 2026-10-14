@@ -68,6 +68,7 @@
     <string name="menu_reset">Reset</string>
     <string name="menu_exit">Exit game</string>
     <string name="menu_change_disc">Change disc</string>
+    <string name="menu_disc_now_playing">Now playing</string>
     <string name="menu_disc_number">Disc %1$d</string>
     <string name="emulation_disc_changed">Inserted %1$s</string>
     <string name="emulation_disc_change_failed">Could not change the disc</string>
@@ -121,6 +122,7 @@
     <string name="library_search">Search</string>
     <string name="library_search_close">Close search</string>
     <string name="library_search_hint">Title or serial</string>
+    <string name="library_disc_last_played">Last played</string>
     <string name="library_choose_disc">Choose disc</string>
     <string name="library_discard_title">Discard the suspended game?</string>
     <string name="library_discard_text">The suspended game is on another disc. Starting this disc discards it.</string>

@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import com.kira3.ametrine.ui.components.DiscItem
+import com.kira3.ametrine.ui.components.DiscSheet
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.Color
@@ -512,23 +514,12 @@ private fun ShortcutIconDialog(request: ShortcutIconRequest, onChosen: (SaveIcon
 /** The discs of a game, the one a tap starts marked; picking one starts the game from it. */
 @Composable
 private fun DiscDialog(entry: LibraryEntry, onPick: (Game) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.library_choose_disc)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                entry.discs.forEach { disc ->
-                    ListItem(
-                        headlineContent = { Text(disc.discTitle, maxLines = 4) },
-                        leadingContent = { RadioButton(selected = disc.uri == entry.game.uri, onClick = null) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier.clickable { onPick(disc) },
-                    )
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
+    DiscSheet(
+        title = stringResource(R.string.library_choose_disc),
+        discs = entry.discs.mapIndexed { i, disc -> DiscItem(i + 1, disc.discTitle, disc.uri == entry.game.uri) },
+        currentLabel = stringResource(R.string.library_disc_last_played),
+        onPick = { onPick(entry.discs[it]) },
+        onDismiss = onDismiss,
     )
 }
 
