@@ -200,7 +200,6 @@ class EmulationActivity : ComponentActivity() {
     private val overlayOpen get() = menuOpen || padEditor != null || rewindOpen || cheatsOpen || macrosOpen || searchOpen || waitDialogOpen || memoEdit != null || aiShot != null
 
     /** Waits for the game's CRC, then gives the core its cheats. */
-    private var cheatsJob: Job? = null
 
     /** Set by Reset: when the VM stops, boot the game again instead of finishing. */
     private var restartRequested = false
@@ -459,15 +458,14 @@ class EmulationActivity : ComponentActivity() {
         val suspended = serial?.takeIf { resume }?.let { withContext(Dispatchers.IO) { core.suspendStateFile(it) } }
         suspendFile = suspended
         core.setBootSaveState(suspended)
-        serial?.let { withContext(Dispatchers.IO) { core.clearRewindPoints(it) } }
         customDriverInUse = useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
-        startCheats()
-        startCrcRecord()
+        // Every game the core runs gets this game's cheats, so a game without a serial gets none.
+        core.setCheats(serial?.let { container.cheatRepository.load(it) }.orEmpty())
 
         Log.i(TAG, "Booting $gameUri (serial $serial)" + if (suspended != null) " from ${suspended.name}" else "")
         emulationThread = thread(name = "Emulation") {
-            val error = core.runVm(gameUri.toString())
+            val error = core.runVm(gameUri.toString(), serial)
             runOnUiThread { onVmStopped(gameUri, error) }
         }
         customDriverInUse?.let { driver ->
@@ -673,43 +671,6 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * The core names a game's cheat file by its CRC, known only once the game runs, so the
-     * cheats go in a few seconds after the boot.
-     */
-    private fun startCheats() {
-        val serial = serial ?: return
-        cheatsJob?.cancel()
-        cheatsJob = lifecycleScope.launch {
-            while (isActive) {
-                if (core.hasActiveVm) {
-                    val cheats = container.cheatRepository.load(serial)
-                    if (withContext(Dispatchers.IO) { core.applyCheats(serial, cheats) }) break
-                }
-                delay(CHEATS_POLL_MS)
-            }
-        }
-    }
-
-    /** Notes the game's CRC once the core knows it, so a save state file can be imported for the game later. */
-    private fun startCrcRecord() {
-        val key = recordKey ?: return
-        if (serial == null) return
-        lifecycleScope.launch {
-            while (isActive) {
-                if (core.hasActiveVm) {
-                    val crc = core.gameCrc.uppercase()
-                    if (crc.length == 8 && crc != "00000000") {
-                        runCatching { container.gameRecordRepository.update(key) { it.copy(crc = crc) } }
-                            .onFailure { Log.w(TAG, "Could not record the game's CRC", it) }
-                        break
-                    }
-                }
-                delay(CHEATS_POLL_MS)
-            }
-        }
-    }
-
     private fun showCheats() {
         cheatsOpen = true
         cheatList = null
@@ -731,7 +692,7 @@ class EmulationActivity : ComponentActivity() {
         lifecycleScope.launch {
             container.cheatRepository.update(serial) { list -> list.map { if (it.id == id) it.copy(enabled = enabled) else it } }
             val cheats = container.cheatRepository.load(serial)
-            withContext(Dispatchers.IO) { core.applyCheats(serial, cheats) }
+            core.setCheats(cheats)
         }
     }
 
@@ -1458,7 +1419,6 @@ class EmulationActivity : ComponentActivity() {
         private const val EXTRA_FAILED_DRIVER = "com.kira3.ametrine.extra.FAILED_DRIVER"
         private const val VM_STOP_WAIT_MS = 5_000L
         private const val VM_POLL_MS = 200L
-        private const val CHEATS_POLL_MS = 500L
         private const val RECORDING_TICK_MS = 250L
 
         /** Memos saved one after the other are offset in this many steps before starting over. */

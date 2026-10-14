@@ -77,10 +77,11 @@ internal object NativeCore {
     // ---- VM lifecycle ----
 
     /**
-     * Boots [path] (empty for the BIOS alone) and runs it until the VM shuts down. Blocks the
-     * calling thread. Null when it booted, or why it did not.
+     * Boots [path] (empty for the BIOS alone) and runs it until the VM shuts down, from the save
+     * state at [saveState] unless it is empty. Blocks the calling thread. Null when it booted, or
+     * why it did not.
      */
-    @JvmStatic external fun runSystem(path: String): String?
+    @JvmStatic external fun runSystem(path: String, saveState: String): String?
     @JvmStatic external fun hasActiveSystem(): Boolean
     @JvmStatic external fun pause()
     @JvmStatic external fun resume()
@@ -94,6 +95,48 @@ internal object NativeCore {
     /** Moves the left or [right] stick of the pad in [port] to ([x], [y]), each -1..1 with +y down. */
     @JvmStatic external fun setPadStick(port: Int, right: Boolean, x: Float, y: Float)
     @JvmStatic external fun setFastForward(enabled: Boolean)
+
+    // ---- Save states, rewind and screenshots ----
+
+    /** Saves the running game to [path]. Blocks. Null when it did, or why not. */
+    @JvmStatic external fun saveState(path: String): String?
+
+    /** Loads the state at [path] into the running game. Blocks. Null when it did, or why not. */
+    @JvmStatic external fun loadState(path: String): String?
+
+    /** True while a memory card is waiting to be written, which refuses a save state. */
+    @JvmStatic external fun isSavingMemoryCards(): Boolean
+
+    /** [serial, PNG screenshot or null] from the header of the state at [path]; null if it is not a state. */
+    @JvmStatic external fun getSaveStateInfo(path: String): Array<Any?>?
+
+    /** [ages in ms (LongArray), PNG thumbnails (Array<ByteArray?>)] of the rewind points, newest first. */
+    @JvmStatic external fun getRewindPoints(): Array<Any>
+
+    /** Goes back to the rewind point [index] (in [getRewindPoints]). Blocks. */
+    @JvmStatic external fun loadRewindPoint(index: Int): Boolean
+
+    /** Writes what is on screen to [path] as a PNG, on a thread of the core's own. */
+    @JvmStatic external fun saveScreenshot(path: String)
+
+    // ---- Cheats ----
+
+    /** The cheats to run in every game from now on: [names] with their code lines in [codes]. */
+    @JvmStatic external fun setCheats(names: Array<String>, codes: Array<String>)
+
+    /** Alternating names and code lines of the cheats in a cheat file's [text]; null if it has none. */
+    @JvmStatic external fun parseCheats(text: String): Array<String>?
+
+    /** Alternating names and code lines of the cheat database's cheats for [serial]; null if it has none. Needs [initialize]. */
+    @JvmStatic external fun getDatabaseCheats(serial: String): Array<String>?
+
+    // ---- Memory ----
+
+    /** [length] bytes of main RAM from [address]; null with no game or out of range. Blocks. */
+    @JvmStatic external fun readMemory(address: Int, length: Int): ByteArray?
+
+    /** Writes [value] as [size] (1, 2 or 4) bytes at [address] of main RAM. Blocks. */
+    @JvmStatic external fun writeMemory(address: Int, size: Int, value: Int): Boolean
 
     // ---- Info ----
 

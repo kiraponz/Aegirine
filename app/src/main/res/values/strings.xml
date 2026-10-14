@@ -168,6 +168,12 @@
     <string name="settings_unit_percent">%1$d%%</string>
     <string name="settings_unit_ms">%1$d ms</string>
     <string name="settings_unit_seconds">%1$d s</string>
+    <string name="settings_section_rewind">Rewind</string>
+    <string name="settings_rewind">Rewind</string>
+    <string name="settings_rewind_summary">Keeps points to go back to as you play, from a button over the game. Each point stalls the game for a moment.</string>
+    <string name="settings_rewind_interval">A point every</string>
+    <string name="settings_rewind_keep">Points to keep</string>
+    <string name="settings_rewind_keep_summary">Each point takes a few megabytes of memory, more at a higher resolution</string>
     <string name="settings_graphics">Graphics</string>
     <string name="settings_graphics_summary">Renderer, resolution, enhancements, overlay</string>
     <string name="settings_performance">Performance</string>
@@ -284,7 +290,7 @@
         <item quantity="other">Delete %1$d saves?</item>
     </plurals>
     <string name="settings_system">System</string>
-    <string name="settings_system_summary">Boot, region, BIOS, memory cards</string>
+    <string name="settings_system_summary">Boot, region, BIOS, memory cards, rewind</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_advanced_summary">Console and GPU accuracy</string>
     <string name="settings_section_rendering">Rendering</string>
@@ -447,13 +453,15 @@
     <string name="cheats_import">Import</string>
     <string name="cheats_name">Name</string>
     <string name="cheats_code">Code</string>
-    <string name="cheats_code_hint">One line per code: 203F1234 00000001, or a patch= line from a .pnach file</string>
+    <string name="cheats_code_hint">One GameShark code per line, such as 8009C6E4 0FFF</string>
     <string name="cheats_bad_line">Line %1$d is not a code the core understands</string>
     <string name="cheats_save">Save</string>
     <string name="cheats_delete">Delete</string>
-    <string name="cheats_empty">No cheats yet. Add a code, or import a .pnach file.</string>
-    <string name="cheats_about">Cheats take effect a few seconds after the game starts.</string>
-    <string name="cheats_import_none">No cheats found in that file</string>
+    <string name="cheats_empty">No cheats yet. Add a code, or import the cheat database\'s codes or a cheat file.</string>
+    <string name="cheats_about">Cheats can crash a game or spoil its saves. Switch on only the ones you need.</string>
+    <string name="cheats_import_none">No new cheats found</string>
+    <string name="cheats_import_database">From the cheat database</string>
+    <string name="cheats_import_file">From a file (.cht, .txt)</string>
     <string name="cheats_menu_empty">No cheats for this game. Add them in the game\'s settings.</string>
     <plurals name="cheats_imported">
         <item quantity="one">Added %1$d cheat</item>
@@ -603,14 +611,13 @@
     <string name="states_export">Export</string>
     <string name="states_delete">Delete</string>
     <string name="states_empty">No game has a save state yet</string>
-    <string name="states_about">Export keeps the file name, which tells the game and the slot. If the name was changed, choose the game and slot when importing</string>
+    <string name="states_about">A state file knows the game it was saved from. Export keeps the file name, which tells the slot</string>
     <string name="states_delete_title">Delete slot %1$d?</string>
     <string name="states_delete_text">The state is deleted from this device</string>
     <string name="states_import_title">Import save state</string>
     <string name="states_import_game">Game</string>
     <string name="states_import_slot">Slot</string>
-    <string name="states_import_unknown_crc">Start this game once, so the app can learn its ID, then import again</string>
-    <string name="states_import_renamed">The file name is not the original, so choose the game and slot</string>
+    <string name="states_import_renamed">The file does not say its game or slot, so choose them</string>
     <string name="states_import_replaces">Slot %1$d already has a state, which is replaced</string>
     <string name="states_exported">Exported</string>
     <string name="states_imported">Imported</string>

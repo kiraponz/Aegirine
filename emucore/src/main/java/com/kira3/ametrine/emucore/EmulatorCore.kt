@@ -45,8 +45,8 @@ class EmulatorCore(context: Context) {
     /** Where the core keeps its memory cards (128 KB `.mcd` files). */
     val memoryCardsDir: File = File(dataDir, "memcards")
 
-    /** The save states (`<serial> (<CRC>).<slot>.p2s`), and the resume and rewind states. */
-    val saveStatesDir: File = File(dataDir, "sstates")
+    /** The save states (`<serial>_<slot>.sav`) and the suspend states (`<serial>_resume.sav`). */
+    val saveStatesDir: File = File(dataDir, "savestates")
 
     /** Null when the native core loaded; otherwise a reason it cannot run on this device. */
     val unavailableReason: String? get() = NativeCore.loadError ?: initError
@@ -217,11 +217,31 @@ class EmulatorCore(context: Context) {
     fun gameDbTitle(serial: String): String? = NativeCore.getGameDbTitle(serial)
 
     /**
-     * Writes [serial]'s cheats where the core reads them and turns on the ones that are
-     * enabled, in the running game. Blocking I/O. Step 6.
+     * The cheats to run: the [Cheat.enabled] ones of [cheats] go into the running game now, and into
+     * every game booted after it. Codes the core doesn't understand are skipped.
      */
-    @Suppress("UNUSED_PARAMETER")
-    fun applyCheats(serial: String, cheats: List<Cheat>): Boolean = false
+    fun setCheats(cheats: List<Cheat>) {
+        val enabled = cheats.filter { it.enabled }
+            .map { it.name to GameShark.check(it.code).lines.joinToString("\n") }
+            .filter { it.second.isNotEmpty() }
+        NativeCore.setCheats(enabled.map { it.first }.toTypedArray(), enabled.map { it.second }.toTypedArray())
+    }
+
+    /**
+     * The cheats in a cheat file's [text] (the PCSXR, libretro and ePSXe formats), all off, each
+     * with an id from [newId]. Empty if it has none.
+     */
+    fun parseCheatFile(text: String, newId: () -> String): List<Cheat> =
+        NativeCore.parseCheats(text).toCheats(newId)
+
+    /** The cheat database's cheats for [serial], all off, each with an id from [newId]. */
+    suspend fun databaseCheats(serial: String, newId: () -> String): List<Cheat> {
+        initialize()
+        return withContext(Dispatchers.IO) { NativeCore.getDatabaseCheats(serial).toCheats(newId) }
+    }
+
+    private fun Array<String>?.toCheats(newId: () -> String): List<Cheat> =
+        orEmpty().toList().chunked(2).filter { it.size == 2 }.map { (name, code) -> Cheat(newId(), name, code.trim()) }
 
     /** Opens [uri] and detaches the fd; the core takes ownership and closes it. */
     private fun openFd(uri: Uri): Int? = try {
@@ -257,16 +277,21 @@ class EmulatorCore(context: Context) {
      * A game from a SAF tree can reach the files beside it (a .cue's tracks, .sbi and .ppf files);
      * one opened on its own cannot.
      *
+     * [serial] names the game's save states; a game without one has none.
+     *
      * Returns null when the game ran and exited normally, or the reason it failed to boot.
      */
-    fun runVm(gameUri: String): String? {
+    fun runVm(gameUri: String, serial: String?): String? {
         check(initialized) { "EmulatorCore.initialize() has not completed" }
         val path = if (gameUri.isEmpty()) "" else files.pathFor(Uri.parse(gameUri)) ?: return "Could not open the game file"
+        val saveState = bootSaveState?.absolutePath.orEmpty()
+        bootSaveState = null
+        runningSerial = serial
         _vmState.value = VmState.Starting
         // The core boots at the speed the settings give it.
         _fastForward.value = false
         return try {
-            NativeCore.runSystem(path)
+            NativeCore.runSystem(path, saveState)
         } finally {
             bootSettings = null
             _vmState.value = VmState.Stopped
@@ -288,55 +313,100 @@ class EmulatorCore(context: Context) {
     @Suppress("UNUSED_PARAMETER")
     fun setAppBackgrounded(backgrounded: Boolean) = Unit
 
-    // TODO(step 6): save states, the suspend state, rewind and screenshots.
+    // ---- Save states ----
 
-    @Suppress("UNUSED_PARAMETER")
-    fun saveState(slot: Int): Boolean = false
+    /** The serial [runVm] was given, which names the running game's state files. */
+    @Volatile
+    private var runningSerial: String? = null
 
-    @Suppress("UNUSED_PARAMETER")
-    fun loadState(slot: Int): Boolean = false
+    /** The file of [slot] (-1 for the suspend state) of the game with [serial], named as the core names it. */
+    fun saveStateFile(serial: String, slot: Int): File =
+        File(saveStatesDir, if (slot < 0) "${serial}_resume.sav" else "${serial}_$slot.sav")
+
+    /** Saves the running game to [slot]. Blocks until the state is written. */
+    fun saveState(slot: Int): Boolean = saveStateTo(slot)
+
+    /** Loads [slot] into the running game. Blocks until it is loaded. */
+    fun loadState(slot: Int): Boolean {
+        val file = runningSerial?.let { saveStateFile(it, slot) }?.takeIf { it.isFile } ?: return false
+        return NativeCore.loadState(file.absolutePath).logError("Loading ${file.name}")
+    }
 
     /**
      * Saves the suspend state: where the game stands, for [suspendStateFile] to find the next
-     * time the game starts. Step 6.
+     * time the game starts.
      */
-    fun saveSuspendState(): Boolean = false
+    fun saveSuspendState(): Boolean = saveStateTo(-1)
 
-    /** The suspend state [serial] left behind, if any. Blocking I/O. Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun suspendStateFile(serial: String): File? = null
+    private fun saveStateTo(slot: Int): Boolean {
+        val file = runningSerial?.let { saveStateFile(it, slot) } ?: return false
+        saveStatesDir.mkdirs()
+        return NativeCore.saveState(file.absolutePath).logError("Saving ${file.name}")
+    }
 
-    /** Serials that have a suspend state to resume from. Blocking I/O. Step 6. */
-    fun resumableSerials(): Set<String> = emptySet()
+    /** True for null, else logs [this] as why [what] failed. */
+    private fun String?.logError(what: String): Boolean {
+        if (this != null) Log.w(TAG, "$what failed: $this")
+        return this == null
+    }
 
-    /** Makes the next [runVm] start from the save state at [file], or from the beginning for null. Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun setBootSaveState(file: File?) = Unit
+    /** The suspend state [serial] left behind, if any. Blocking I/O. */
+    fun suspendStateFile(serial: String): File? = saveStateFile(serial, -1).takeIf { it.isFile }
 
-    /** The points rewind can go back to for the running game, newest first. Blocking I/O. Step 6. */
-    fun rewindPoints(): List<SaveStateInfo> = emptyList()
+    /** Serials that have a suspend state to resume from. Blocking I/O. */
+    fun resumableSerials(): Set<String> = saveStatesDir.list().orEmpty()
+        .filter { it.endsWith(RESUME_SUFFIX) }
+        .mapTo(HashSet()) { it.removeSuffix(RESUME_SUFFIX) }
 
-    /** Goes back to the rewind point [n] (see [rewindPoints]). Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun rewindTo(n: Int): Boolean = false
+    @Volatile
+    private var bootSaveState: File? = null
 
-    /** Forgets the rewind points a game left. Blocking I/O. Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun clearRewindPoints(serial: String) = Unit
+    /** Makes the next [runVm] start from the save state at [file], or from the beginning for null. */
+    fun setBootSaveState(file: File?) {
+        bootSaveState = file
+    }
 
-    /** True while the memory card is being written; a save state is refused then. Step 6. */
-    val isMemcardBusy: Boolean get() = false
+    /** True while the memory card is being written; a save state is refused then. */
+    val isMemcardBusy: Boolean get() = NativeCore.isSavingMemoryCards()
 
-    /** What [slot] holds for the running game, or null when it is empty. Blocking I/O. Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun saveStateInfo(slot: Int): SaveStateInfo? = null
+    /** What [slot] holds for the running game, or null when it is empty. Blocking I/O. */
+    fun saveStateInfo(slot: Int): SaveStateInfo? {
+        val file = runningSerial?.let { saveStateFile(it, slot) }?.takeIf { it.isFile } ?: return null
+        return SaveStateInfo(slot, file.lastModified(), readSaveState(file)?.screenshot)
+    }
+
+    /** What the header of the state file [file] says, or null if it is not a save state. Blocking I/O. */
+    fun readSaveState(file: File): SaveStateHeader? {
+        val info = NativeCore.getSaveStateInfo(file.absolutePath) ?: return null
+        return SaveStateHeader(serial = (info[0] as? String).orEmpty(), screenshot = info[1] as? ByteArray)
+    }
+
+    // ---- Rewind ----
 
     /**
-     * Captures the next frame the running game presents to [png] (a path ending in .png).
-     * Returns straight away; the core writes the file a moment later. Step 6.
+     * The points rewind can go back to for the running game, newest first. [SaveStateInfo.slot] is
+     * the place in the history (1 is the newest) and [SaveStateInfo.savedAt] is when it was saved,
+     * counting only the time the game ran. Blocks while the core reads them.
      */
-    @Suppress("UNUSED_PARAMETER")
-    fun saveScreenshot(png: File) = Unit
+    fun rewindPoints(): List<SaveStateInfo> {
+        val points = NativeCore.getRewindPoints()
+        val ages = points[0] as LongArray
+        @Suppress("UNCHECKED_CAST")
+        val thumbnails = points[1] as Array<ByteArray?>
+        val now = System.currentTimeMillis()
+        return ages.indices.map { i -> SaveStateInfo(i + 1, now - ages[i], thumbnails[i]) }
+    }
+
+    /** Goes back to the rewind point [n] (see [rewindPoints]). The newer points are dropped. */
+    fun rewindTo(n: Int): Boolean = NativeCore.loadRewindPoint(n - 1)
+
+    // ---- Screenshots ----
+
+    /**
+     * Captures what the running game shows to [png] (a path ending in .png). Returns straight
+     * away; the core writes the file a moment later.
+     */
+    fun saveScreenshot(png: File) = NativeCore.saveScreenshot(png.absolutePath)
 
     val fps: Float get() = NativeCore.getFps()
 
@@ -354,16 +424,15 @@ class EmulatorCore(context: Context) {
         return v
     }
 
-    /** [length] bytes of main RAM from [address] (the first [MAIN_RAM_BYTES]), or null with no game or out of range. Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun readMemory(address: Int, length: Int): ByteArray? = null
+    /**
+     * [length] bytes of main RAM from [address], or null with no game or out of range. Blocks for up
+     * to a frame, until the core is between frames.
+     */
+    fun readMemory(address: Int, length: Int): ByteArray? = NativeCore.readMemory(address, length)
 
-    /** Writes [value] as [size] (1, 2 or 4) little-endian bytes at [address]. False with no game or out of range. Step 6. */
-    @Suppress("UNUSED_PARAMETER")
-    fun writeValue(address: Int, size: Int, value: Long): Boolean = false
-
-    /** "00000000" until the game's ELF is running. Step 6 decides whether this stays. */
-    val gameCrc: String get() = "00000000"
+    /** Writes [value] as [size] (1, 2 or 4) little-endian bytes at [address]. False with no game or out of range. */
+    fun writeValue(address: Int, size: Int, value: Long): Boolean =
+        size in setOf(1, 2, 4) && NativeCore.writeMemory(address, size, value.toInt())
 
     // ---- Surface (from SurfaceHolder.Callback) ----
 
@@ -426,8 +495,13 @@ class EmulatorCore(context: Context) {
     }
 
     companion object {
-        /** Size of the main RAM that [readMemory] reaches. */
+        /**
+         * Size of the main RAM the memory search covers. With the 8 MB RAM setting, [readMemory]
+         * reaches further, but games made for the PS1 only use the first 2 MB.
+         */
         const val MAIN_RAM_BYTES = 2 * 1024 * 1024
+
+        private const val RESUME_SUFFIX = "_resume.sav"
 
         /** The save-state slots, as the core numbers them. */
         val SAVE_STATE_SLOTS: IntRange = 1..10

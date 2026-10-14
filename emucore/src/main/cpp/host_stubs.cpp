@@ -61,8 +61,12 @@ std::string Host::TranslatePluralToString(const char* context, const char* msg, 
 SmallString Host::TranslatePluralToSmallString(const char* context, const char* msg, const char* disambiguation,
                                                int count)
 {
-  SmallString ret(msg);
-  ret.replace("%n", TinyString::from_format("{}", count));
+  // Built by hand: SmallString::replace leaves a stray character behind when the count is shorter than "%n".
+  std::string_view text(msg);
+  SmallString ret;
+  for (size_t pos; (pos = text.find("%n")) != std::string_view::npos; text = text.substr(pos + 2))
+    ret.append_format("{}{}", text.substr(0, pos), count);
+  ret.append(text);
   return ret;
 }
 
@@ -71,10 +75,6 @@ void Host::OnIdleStateChanged()
 }
 
 void Host::OnPerformanceCountersUpdated()
-{
-}
-
-void Host::OnGameChanged(const std::string& disc_path, const std::string& game_serial, const std::string& game_name)
 {
 }
 

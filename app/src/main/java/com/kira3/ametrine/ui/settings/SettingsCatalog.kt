@@ -452,6 +452,21 @@ object SettingsCatalog {
                 MemoryCardsManageSetting,
             ),
         ),
+        SettingsSection(
+            R.string.settings_section_rewind,
+            listOf(
+                Toggle("rewind.enabled", R.string.settings_rewind, R.string.settings_rewind_summary),
+                Slider(
+                    "rewind.intervalSeconds", R.string.settings_rewind_interval,
+                    range = 1..60, unit = R.string.settings_unit_seconds,
+                    enabledWhen = { it.boolean("rewind.enabled") },
+                ),
+                Slider(
+                    "rewind.keep", R.string.settings_rewind_keep, R.string.settings_rewind_keep_summary,
+                    range = 1..20, enabledWhen = { it.boolean("rewind.enabled") },
+                ),
+            ),
+        ),
     )
 
     private fun advanced() = listOf(

@@ -11,7 +11,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.kira3.ametrine.AmetrineApplication
 import com.kira3.ametrine.data.CheatRepository
 import com.kira3.ametrine.emucore.Cheat
-import com.kira3.ametrine.emucore.Pnach
+import com.kira3.ametrine.emucore.EmulatorCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,13 +24,14 @@ import java.util.UUID
 class CheatsViewModel(
     private val serial: String,
     private val repository: CheatRepository,
+    private val core: EmulatorCore,
     private val application: Application,
 ) : ViewModel() {
     /** Null while the cheats are being read. */
     val cheats: StateFlow<List<Cheat>?> = repository.cheats(serial)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** How many cheats the last import added; -1 when the file had none. Cleared by [onImportShown]. */
+    /** How many cheats the last import added; -1 when there were none. Cleared by [onImportShown]. */
     val imported = MutableStateFlow<Int?>(null)
 
     fun setEnabled(id: String, enabled: Boolean) = edit { list ->
@@ -55,10 +56,30 @@ class CheatsViewModel(
                     .onFailure { Log.w(TAG, "Could not read $uri", it) }
                     .getOrNull()
             }
-            val found = text?.let { Pnach.parse(it) { UUID.randomUUID().toString() } }.orEmpty()
-            if (found.isNotEmpty()) repository.update(serial) { it + found }
-            imported.value = if (found.isEmpty()) -1 else found.size
+            add(text?.let { core.parseCheatFile(it) { UUID.randomUUID().toString() } }.orEmpty())
         }
+    }
+
+    /** Adds the cheat database's cheats for the game, all off. */
+    fun importFromDatabase() {
+        viewModelScope.launch {
+            val found = runCatching { core.databaseCheats(serial) { UUID.randomUUID().toString() } }
+                .onFailure { Log.w(TAG, "Could not read the cheat database", it) }
+                .getOrDefault(emptyList())
+            add(found)
+        }
+    }
+
+    /** Adds [found], leaving out cheats already in the list with the same name and code. */
+    private suspend fun add(found: List<Cheat>) {
+        var added = 0
+        repository.update(serial) { list ->
+            val have = list.mapTo(HashSet()) { it.name to it.code }
+            val new = found.filter { have.add(it.name to it.code) }
+            added = new.size
+            list + new
+        }
+        imported.value = if (added == 0) -1 else added
     }
 
     fun onImportShown() {
@@ -75,7 +96,7 @@ class CheatsViewModel(
         fun factory(serial: String): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as AmetrineApplication
-                CheatsViewModel(serial, application.container.cheatRepository, application)
+                CheatsViewModel(serial, application.container.cheatRepository, application.container.emulatorCore, application)
             }
         }
     }

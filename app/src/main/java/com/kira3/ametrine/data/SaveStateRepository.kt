@@ -12,12 +12,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-import java.util.zip.ZipFile
 
 /** A numbered save-state slot of a game, a file in the core's state folder. */
 data class SaveStateFile(
     val serial: String,
-    val crc: String,
     val slot: Int,
     val name: String,
     val bytes: Long,
@@ -25,20 +23,17 @@ data class SaveStateFile(
 )
 
 /**
- * A save-state file picked to import, with what its name says about it. A name that was changed on the
- * way in (a copy suffix, other separators) still gives what can be read from it; the rest is null and the
- * user chooses the game and slot.
+ * A save-state file picked to import. [serial] is the game its header names (null for a game
+ * without one) and [slot] the slot its file name gives, if it still does.
  */
-data class SaveStateImport(val uri: Uri, val name: String, val serial: String?, val crc: String?, val slot: Int?)
+data class SaveStateImport(val uri: Uri, val name: String, val serial: String?, val slot: Int?)
 
 enum class SaveStateResult { Ok, Invalid, Failed, Busy }
 
 /**
- * The numbered save states in `<dataDir>/sstates`. A state file is named by the core
- * `<serial> (<CRC>).<slot>.p2s` and is a zip (the machine's memory plus a screenshot). Exporting copies
- * the file out under that name, and importing reads the game and slot from the name again. The core
- * names a game's state files by its CRC, which the file itself does not hold, so when the name was
- * changed on the way in the caller supplies the game (and its CRC) and the slot.
+ * The numbered save states in the core's state folder, named by the core `<serial>_<slot>.sav`.
+ * A state's header holds the game's serial and a screenshot, so an imported file goes to the
+ * game it was saved from whatever its name; only the slot comes from the name.
  */
 class SaveStateRepository(context: Context, private val core: EmulatorCore) {
     private val appContext = context.applicationContext
@@ -49,20 +44,13 @@ class SaveStateRepository(context: Context, private val core: EmulatorCore) {
     private fun list(): List<SaveStateFile> =
         core.saveStatesDir.listFiles().orEmpty().mapNotNull { file ->
             val match = NAME.matchEntire(file.name) ?: return@mapNotNull null
-            SaveStateFile(
-                match.groupValues[1], match.groupValues[2], match.groupValues[3].toInt(),
-                file.name, file.length(), file.lastModified(),
-            )
+            val slot = match.groupValues[2].toInt().takeIf { it in EmulatorCore.SAVE_STATE_SLOTS } ?: return@mapNotNull null
+            SaveStateFile(match.groupValues[1], slot, file.name, file.length(), file.lastModified())
         }
 
-    /** The screenshot inside a state file, as PNG bytes; null if it has none. Blocking I/O. */
-    fun thumbnail(state: SaveStateFile): ByteArray? = try {
-        ZipFile(File(core.saveStatesDir, state.name)).use { zip ->
-            zip.getEntry(SCREENSHOT)?.let { entry -> zip.getInputStream(entry).use { it.readBytes() } }
-        }
-    } catch (e: IOException) {
-        null
-    }
+    /** The screenshot in a state file, as PNG bytes; null if it has none. Blocking I/O. */
+    fun thumbnail(state: SaveStateFile): ByteArray? =
+        core.readSaveState(File(core.saveStatesDir, state.name))?.screenshot
 
     suspend fun export(state: SaveStateFile, uri: Uri): SaveStateResult = withContext(Dispatchers.IO) {
         if (isGameProcessRunning(appContext)) return@withContext SaveStateResult.Busy
@@ -76,36 +64,32 @@ class SaveStateRepository(context: Context, private val core: EmulatorCore) {
         }
     }
 
-    /** Reads what the name of the file at [uri] says about it; null if the name cannot be read. */
+    /** Reads the game from the header of the file at [uri], and the slot from its name; null if it is not a state. */
     suspend fun inspect(uri: Uri): SaveStateImport? = withContext(Dispatchers.IO) {
         val name = displayName(uri) ?: return@withContext null
-        NAME.matchEntire(name)?.let { match ->
-            val slot = match.groupValues[3].toInt().takeIf { it in EmulatorCore.SAVE_STATE_SLOTS }
-            return@withContext SaveStateImport(uri, name, match.groupValues[1], match.groupValues[2].uppercase(), slot)
+        val temp = File(appContext.cacheDir, "inspect.sav")
+        try {
+            if (!copy(uri, temp)) return@withContext null
+            val header = core.readSaveState(temp) ?: return@withContext null
+            val slot = LOOSE_SLOT.find(name)?.groupValues?.get(1)?.toInt()?.takeIf { it in EmulatorCore.SAVE_STATE_SLOTS }
+            SaveStateImport(uri, name, header.serial.ifEmpty { null }, slot)
+        } catch (e: IOException) {
+            Log.w(TAG, "Could not read $uri", e)
+            null
+        } finally {
+            temp.delete()
         }
-        // Renamed: take whatever of the three parts is still recognizable.
-        val serial = LOOSE_SERIAL.find(name)?.value?.uppercase()
-        val crc = LOOSE_CRC.findAll(name).lastOrNull()?.groupValues?.get(1)?.uppercase()
-        val slot = LOOSE_SLOT.find(name)?.groupValues?.get(1)?.toInt()?.takeIf { it in EmulatorCore.SAVE_STATE_SLOTS }
-        SaveStateImport(uri, name, serial, crc, slot)
     }
 
-    /** Puts the file in [slot] of the game with [serial] and [crc]. */
-    suspend fun import(uri: Uri, serial: String, crc: String, slot: Int): SaveStateResult = withContext(Dispatchers.IO) {
+    /** Puts the file in [slot] of the game with [serial]. */
+    suspend fun import(uri: Uri, serial: String, slot: Int): SaveStateResult = withContext(Dispatchers.IO) {
         if (isGameProcessRunning(appContext)) return@withContext SaveStateResult.Busy
-        val target = File(core.saveStatesDir, fileName(serial, crc, slot))
+        val target = core.saveStateFile(serial, slot)
         val temp = File(core.saveStatesDir, target.name + ".importing")
         try {
             core.saveStatesDir.mkdirs()
-            val input = appContext.contentResolver.openInputStream(uri) ?: return@withContext SaveStateResult.Failed
-            input.use { stream -> temp.outputStream().use { stream.copyTo(it) } }
-            // A state is a zip with the screenshot in it; anything else is not one.
-            val valid = try {
-                ZipFile(temp).use { it.getEntry(VERSION_ENTRY) != null }
-            } catch (e: IOException) {
-                false
-            }
-            if (!valid) {
+            if (!copy(uri, temp)) return@withContext SaveStateResult.Failed
+            if (core.readSaveState(temp) == null) {
                 temp.delete()
                 return@withContext SaveStateResult.Invalid
             }
@@ -134,7 +118,11 @@ class SaveStateRepository(context: Context, private val core: EmulatorCore) {
         changes.value++
     }
 
-    private fun fileName(serial: String, crc: String, slot: Int) = "$serial ($crc).%02d.p2s".format(slot)
+    private fun copy(uri: Uri, to: File): Boolean {
+        val input = appContext.contentResolver.openInputStream(uri) ?: return false
+        input.use { stream -> to.outputStream().use { stream.copyTo(it) } }
+        return true
+    }
 
     private fun displayName(uri: Uri): String? =
         appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
@@ -143,11 +131,7 @@ class SaveStateRepository(context: Context, private val core: EmulatorCore) {
 
     companion object {
         private const val TAG = "SaveStateRepository"
-        private const val SCREENSHOT = "Screenshot.png"
-        private const val VERSION_ENTRY = "PCSX2 Savestate Version.id"
-        private val NAME = Regex("^(.+) \\(([0-9A-Fa-f]{8})\\)\\.(\\d{2})\\.p2s$")
-        private val LOOSE_SERIAL = Regex("[A-Za-z]{4}-\\d{5}")
-        private val LOOSE_CRC = Regex("\\(([0-9A-Fa-f]{8})\\)")
-        private val LOOSE_SLOT = Regex("\\)\\.(\\d{1,2})(?!\\d)")
+        private val NAME = Regex("^(.+)_(\\d{1,2})\\.sav$")
+        private val LOOSE_SLOT = Regex("_(\\d{1,2})(?!\\d)[^_]*$")
     }
 }

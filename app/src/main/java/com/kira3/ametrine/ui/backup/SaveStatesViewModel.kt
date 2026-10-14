@@ -29,13 +29,13 @@ enum class SaveStateMessage { Exported, Imported, Deleted, NotAState, Failed, Bu
 /** The states of one game. [title] is the library's name for the serial, if the game is in the library. */
 class GameStates(val serial: String, val title: String?, val states: List<SaveStateFile>)
 
-/**
- * A game a state file can be imported for. [crc] is null when the app has not learned it yet (the game has
- * to run once), and then nothing can be imported for it.
- */
-data class ImportGame(val serial: String, val title: String?, val crc: String?, val takenSlots: Set<Int>)
+/** A game a state file can be imported for. */
+data class ImportGame(val serial: String, val title: String?, val takenSlots: Set<Int>)
 
-/** A state file being imported, waiting for the game and slot to put it in; [serial] and [slot] are what its name suggests. */
+/**
+ * A state file being imported, waiting for the game and slot to put it in; [serial] is the game its header
+ * names and [slot] what its file name suggests.
+ */
 data class PendingImport(val file: SaveStateImport, val games: List<ImportGame>, val serial: String?, val slot: Int?)
 
 data class SaveStatesUiState(
@@ -77,7 +77,7 @@ class SaveStatesViewModel(
 
     fun delete(state: SaveStateFile) = run(SaveStateMessage.Deleted) { repository.delete(state) }
 
-    /** Reads the picked file's name; asks for the game and slot, with what the name still says as the choice. */
+    /** Reads the picked file; asks for the game and slot, with the game it was saved from as the choice. */
     fun open(uri: Uri) {
         viewModelScope.launch {
             val file = repository.inspect(uri)
@@ -86,16 +86,10 @@ class SaveStatesViewModel(
                 return@launch
             }
             val states = uiState.value.games.orEmpty().flatMap { it.states }
-            val crcs = libraryGames.value.filter { it.serial != null && it.record.crc != null }.associate { it.serial!! to it.record.crc!! }
             val serials = (libraryGames.value.mapNotNull { it.serial } + states.map { it.serial } + listOfNotNull(file.serial)).distinct()
             val titles = libraryGames.value.filter { it.serial != null }.associate { it.serial!! to it.title }
             val games = serials.map { serial ->
-                // The CRC this device knows wins; the name's is for a game this device has not run.
-                val crc = crcs[serial]
-                    ?: states.filter { it.serial == serial }.maxByOrNull { it.modified }?.crc?.uppercase()
-                    ?: file.crc.takeIf { serial == file.serial }
-                val taken = states.filter { it.serial == serial && it.crc.equals(crc, ignoreCase = true) }.map { it.slot }.toSet()
-                ImportGame(serial, titles[serial], crc, taken)
+                ImportGame(serial, titles[serial], states.filter { it.serial == serial }.map { it.slot }.toSet())
             }.sortedWith(compareBy({ it.serial != file.serial }, { it.title == null }, { it.title ?: it.serial }))
             pending.value = PendingImport(file, games, file.serial, file.slot)
         }
@@ -107,9 +101,8 @@ class SaveStatesViewModel(
 
     fun import(game: ImportGame, slot: Int) {
         val file = pending.value?.file ?: return
-        val crc = game.crc ?: return
         pending.value = null
-        run(SaveStateMessage.Imported) { repository.import(file.uri, game.serial, crc, slot) }
+        run(SaveStateMessage.Imported) { repository.import(file.uri, game.serial, slot) }
     }
 
     fun onMessageShown() {

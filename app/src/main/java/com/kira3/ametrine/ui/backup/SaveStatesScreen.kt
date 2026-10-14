@@ -214,7 +214,7 @@ fun SaveStatesScreen(
         var serial by remember(pending) { mutableStateOf(pending.serial) }
         var slot by remember(pending) { mutableIntStateOf(pending.slot ?: EmulatorCore.SAVE_STATE_SLOTS.first) }
         val game = pending.games.firstOrNull { it.serial == serial }
-        val exact = pending.file.serial != null && pending.file.crc != null && pending.file.slot != null
+        val exact = pending.file.serial != null && pending.file.slot != null
         AlertDialog(
             onDismissRequest = viewModel::cancelImport,
             title = { Text(stringResource(R.string.states_import_title)) },
@@ -246,14 +246,7 @@ fun SaveStatesScreen(
                             FilterChip(selected = n == slot, onClick = { slot = n }, label = { Text(n.toString()) })
                         }
                     }
-                    if (game != null && game.crc == null) {
-                        Text(
-                            stringResource(R.string.states_import_unknown_crc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    } else if (game != null && slot in game.takenSlots) {
+                    if (game != null && slot in game.takenSlots) {
                         Text(
                             stringResource(R.string.states_import_replaces, slot),
                             style = MaterialTheme.typography.bodySmall,
@@ -264,7 +257,7 @@ fun SaveStatesScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { game?.let { viewModel.import(it, slot) } }, enabled = game?.crc != null) {
+                TextButton(onClick = { game?.let { viewModel.import(it, slot) } }, enabled = game != null) {
                     Text(stringResource(R.string.states_import))
                 }
             },

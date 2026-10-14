@@ -41,6 +41,8 @@ internal object CoreKeys {
         put("TextureReplacements", "EnableVRAMWriteReplacements", "false")
         put("TextureReplacements", "DumpVRAMWrites", "false")
         put("Audio", "Backend", "AAudio")
+        // Cheats are the app's (EmulatorCore.setCheats), not the core's own files.
+        put("Console", "EnableCheats", "false")
         // The app picks the picture's alignment from the screen's shape (android_host.cpp).
         put("Display", "Alignment", "Center")
     }.keys
@@ -87,6 +89,7 @@ internal object CoreKeys {
             writeOsd(s.osd)
             writeSystem(s.system)
             writeControls(s.controls)
+            writeRewind(s.rewind)
         }
 
         private fun writeConsole(c: ConsoleSettings) = with(c) {
@@ -200,6 +203,13 @@ internal object CoreKeys {
             g.string(::memoryCard1File, "MemoryCards", "Card1Path")
             g.string(::memoryCard2Type, "MemoryCards", "Card2Type")
             g.string(::memoryCard2File, "MemoryCards", "Card2Path")
+        }
+
+        private fun writeRewind(r: RewindSettings) = with(r) {
+            val g = group(EmulatorSettings::rewind.name)
+            g.bool(::enabled, "Main", "RewindEnable")
+            put("Main", "RewindFrequency", intervalSeconds.coerceIn(1, 60).toFloat().toString(), setOf(g.path(::intervalSeconds)))
+            g.int(::keep, "Main", "RewindSaveSlots", 1..20)
         }
 
         private fun writeControls(c: ControlsSettings) = with(c) {

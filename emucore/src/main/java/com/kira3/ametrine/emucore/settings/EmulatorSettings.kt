@@ -290,15 +290,15 @@ data class ButtonMapSettings(
     val select: Int = KeyEvent.KEYCODE_BUTTON_SELECT,
 )
 
-/** Rewind: the core's autosaves, kept as a short history the player can go back to. */
+/** Rewind: points the core keeps in memory as the game runs, for the player to go back to. */
 @Serializable
 data class RewindSettings(
-    /** Off by default: each autosave stalls the game for a moment. EmuCore/AutosaveIntervalMinutes is 0 when off. */
+    /** Main/RewindEnable. Off by default: each point stalls the game for a moment. */
     val enabled: Boolean = false,
-    /** EmuCore/AutosaveIntervalMinutes: minutes of play between saves (1..10). */
-    val intervalMinutes: Int = 1,
-    /** EmuCore/AutosaveKeep: how many saves to keep (1..5). */
-    val keep: Int = 5,
+    /** Main/RewindFrequency: seconds of play between points (1..60). */
+    val intervalSeconds: Int = 10,
+    /** Main/RewindSaveSlots: how many points to keep (1..20). */
+    val keep: Int = 6,
 )
 
 /** Asking Gemini about the game screen. App side only: none of these reach the core. The API key is kept apart from settings. */

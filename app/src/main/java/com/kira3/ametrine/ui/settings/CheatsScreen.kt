@@ -3,6 +3,7 @@ package com.kira3.ametrine.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +12,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -45,9 +48,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kira3.ametrine.R
 import com.kira3.ametrine.emucore.Cheat
-import com.kira3.ametrine.emucore.Pnach
+import com.kira3.ametrine.emucore.GameShark
 
-/** A game's cheats: switch them on and off, add and edit codes, import a .pnach file. */
+/** A game's cheats: switch them on and off, add and edit codes, import a cheat file or the cheat database's codes. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CheatsScreen(
@@ -62,6 +65,7 @@ fun CheatsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     // The cheat being edited, or [NEW] for a new one.
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var importMenu by remember { mutableStateOf(false) }
 
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::import)
@@ -86,8 +90,26 @@ fun CheatsScreen(
                 subtitle = gameTitle?.let { { Text(it, maxLines = 1) } },
                 navigationIcon = { BackButton(onBack) },
                 actions = {
-                    TextButton(onClick = { pickFile.launch(arrayOf("*/*")) }) {
-                        Text(stringResource(R.string.cheats_import))
+                    Box {
+                        TextButton(onClick = { importMenu = true }) {
+                            Text(stringResource(R.string.cheats_import))
+                        }
+                        DropdownMenu(expanded = importMenu, onDismissRequest = { importMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.cheats_import_database)) },
+                                onClick = {
+                                    importMenu = false
+                                    viewModel.importFromDatabase()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.cheats_import_file)) },
+                                onClick = {
+                                    importMenu = false
+                                    pickFile.launch(arrayOf("*/*"))
+                                },
+                            )
+                        }
                     }
                 },
                 colors = settingsTopBarColors(),
@@ -118,7 +140,7 @@ fun CheatsScreen(
                         Switch(checked = cheat.enabled, onCheckedChange = { viewModel.setEnabled(cheat.id, it) })
                     },
                     supportingContent = {
-                        val lines = Pnach.check(cheat.code).lines.size
+                        val lines = GameShark.check(cheat.code).lines.size
                         Text(pluralStringResource(R.plurals.cheats_code_lines, lines, lines))
                     },
                 ) { Text(cheat.name, maxLines = 1) }
@@ -159,7 +181,7 @@ private const val NEW = "new"
 private fun CheatDialog(cheat: Cheat?, onSave: (name: String, code: String) -> Unit, onDelete: (() -> Unit)?, onDismiss: () -> Unit) {
     var name by rememberSaveable { mutableStateOf(cheat?.name.orEmpty()) }
     var code by rememberSaveable { mutableStateOf(cheat?.code.orEmpty()) }
-    val check = Pnach.check(code)
+    val check = GameShark.check(code)
     val canSave = name.isNotBlank() && code.isNotBlank() && check.badLine == null && check.lines.isNotEmpty()
     AlertDialog(
         onDismissRequest = onDismiss,

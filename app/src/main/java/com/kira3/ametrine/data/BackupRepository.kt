@@ -67,8 +67,8 @@ class BackupRepository(
     private fun included(part: BackupPart, relative: String): Boolean = when (part) {
         // The lock file is the :emu process's; the rest of the folder is the play records.
         BackupPart.Library -> relative == "records.json"
-        // The numbered slots only: the resume state belongs to a game left half-way, the autosaves to rewind.
-        BackupPart.SaveStates -> relative.endsWith(".p2s") && ".resume." !in relative && ".autosave" !in relative
+        // The numbered slots only: the resume state belongs to a game left half-way.
+        BackupPart.SaveStates -> relative.endsWith(".sav") && !relative.endsWith("_resume.sav")
         else -> true
     }
 

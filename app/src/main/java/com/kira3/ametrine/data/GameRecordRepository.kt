@@ -23,8 +23,6 @@ data class GameRecord(
     val favorite: Boolean = false,
     /** Replaces the GameDB name or file name when set. */
     val customTitle: String? = null,
-    /** The CRC the core named the game's save states by, learned when the game last ran. */
-    val crc: String? = null,
 )
 
 /**

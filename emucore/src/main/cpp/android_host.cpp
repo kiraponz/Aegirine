@@ -4,13 +4,17 @@
 #include "android_host.h"
 
 #include "core/analog_controller.h"
+#include "core/bus.h"
+#include "core/cheats.h"
 #include "core/controller.h"
+#include "core/cpu_core.h"
 #include "core/host.h"
 #include "core/pad.h"
 #include "core/settings.h"
 #include "core/system.h"
 
 #include "util/gpu_device.h"
+#include "util/image.h"
 #include "util/input_manager.h"
 #include "util/window_info.h"
 
@@ -44,6 +48,7 @@ static void SendPadVibration(u32 pad_index, u8 large_motor, u8 small_motor);
 static void StopPadVibration();
 static void RestorePadVibration();
 static void ApplyDisplayLayout();
+static void InstallCheats();
 static std::string GetResourcePath(std::string_view filename, bool allow_override);
 
 static JavaVM* s_java_vm = nullptr;
@@ -95,6 +100,10 @@ static float s_refresh_rate = 0.0f;
 // Where the picture sits (SetDisplayLayout). Guarded by s_window_mutex.
 static bool s_portrait_top = true;
 static u32 s_top_margin = 0;
+
+// The app's cheats (SetCheats), installed in each game the core runs.
+static std::mutex s_cheats_mutex;
+static std::vector<CheatCode> s_cheats;
 
 // How long a boot waits for the activity's surface before it starts without one.
 static constexpr auto WINDOW_WAIT_TIMEOUT = std::chrono::seconds(2);
@@ -171,7 +180,7 @@ bool AndroidHost::Initialize(const std::string& data_dir, Error* error)
   return System::Internal::PerformEarlyHardwareChecks(error) && System::Internal::ProcessStartup(error);
 }
 
-bool AndroidHost::RunSystem(const std::string& path, Error* error)
+bool AndroidHost::RunSystem(const std::string& path, const std::string& save_state, Error* error)
 {
   s_cpu_thread_id.store(std::this_thread::get_id());
   {
@@ -189,7 +198,9 @@ bool AndroidHost::RunSystem(const std::string& path, Error* error)
       s_window_cv.wait_for(lock, WINDOW_WAIT_TIMEOUT, []() { return s_window != nullptr; });
     }
 
-    booted = System::BootSystem(SystemBootParameters(path), error);
+    SystemBootParameters parameters(path);
+    parameters.save_state = save_state;
+    booted = System::BootSystem(std::move(parameters), error);
     while (System::IsValid())
     {
       if (System::IsRunning())
@@ -364,6 +375,184 @@ void AndroidHost::SetPadStick(u32 port, bool right, float x, float y)
 void AndroidHost::SetFastForward(bool enabled)
 {
   Host::RunOnCPUThread([enabled]() { System::SetFastForwardEnabled(enabled); });
+}
+
+bool AndroidHost::SaveState(const std::string& path, Error* error)
+{
+  bool ok = false;
+  Host::RunOnCPUThread(
+    [&path, error, &ok]() {
+      if (!System::IsValid())
+        Error::SetStringView(error, "No game is running.");
+      else
+        ok = System::SaveState(path.c_str(), error, false);
+    },
+    true);
+  return ok;
+}
+
+bool AndroidHost::LoadState(const std::string& path, Error* error)
+{
+  bool ok = false;
+  Host::RunOnCPUThread(
+    [&path, error, &ok]() {
+      if (!System::IsValid())
+        Error::SetStringView(error, "No game is running.");
+      else
+        ok = System::LoadState(path.c_str(), error, false);
+    },
+    true);
+  return ok;
+}
+
+bool AndroidHost::IsSavingMemoryCards()
+{
+  bool saving = false;
+  Host::RunOnCPUThread([&saving]() { saving = System::IsValid() && System::IsSavingMemoryCards(); }, true);
+  return saving;
+}
+
+std::vector<AndroidHost::RewindPoint> AndroidHost::GetRewindPoints()
+{
+  std::vector<System::RewindPoint> points;
+  float frame_rate = 60.0f;
+  Host::RunOnCPUThread(
+    [&points, &frame_rate]() {
+      if (!System::IsValid())
+        return;
+      points = System::GetRewindPoints();
+      frame_rate = System::IsPALRegion() ? 50.0f : 59.94f;
+    },
+    true);
+
+  // Encoded here, off the CPU thread.
+  std::vector<RewindPoint> ret;
+  ret.reserve(points.size());
+  for (const System::RewindPoint& point : points)
+  {
+    RewindPoint& out = ret.emplace_back();
+    out.age_ms = static_cast<u32>(static_cast<float>(point.frames_ago) * 1000.0f / frame_rate);
+    if (point.thumbnail.IsValid())
+    {
+      if (std::optional<std::vector<u8>> png = point.thumbnail.SaveToBuffer("rewind.png"))
+        out.png = std::move(*png);
+    }
+  }
+  return ret;
+}
+
+bool AndroidHost::LoadRewindPoint(u32 index)
+{
+  bool ok = false;
+  Host::RunOnCPUThread([index, &ok]() { ok = System::IsValid() && System::LoadRewindPoint(index); }, true);
+  return ok;
+}
+
+void AndroidHost::SaveScreenshot(const std::string& path)
+{
+  Host::RunOnCPUThread([path]() {
+    if (System::IsValid())
+    {
+      // The game's picture alone, at its own resolution and shape, not the whole portrait surface.
+      System::SaveScreenshot(path.c_str(), DisplayScreenshotMode::InternalResolution, DisplayScreenshotFormat::PNG);
+    }
+  });
+}
+
+void AndroidHost::SetCheats(std::vector<std::pair<std::string, std::string>> cheats)
+{
+  std::vector<CheatCode> codes;
+  codes.reserve(cheats.size());
+  for (auto& [name, lines] : cheats)
+  {
+    CheatCode code;
+    code.description = std::move(name);
+    code.enabled = true;
+    if (code.SetInstructionsFromString(lines) && code.Valid())
+      codes.push_back(std::move(code));
+    else
+      WARNING_LOG("Skipping cheat '{}': no code the core understands", code.description);
+  }
+
+  {
+    std::unique_lock lock(s_cheats_mutex);
+    s_cheats = std::move(codes);
+  }
+  if (s_system_active.load())
+    Host::RunOnCPUThread(&InstallCheats);
+}
+
+void AndroidHost::InstallCheats()
+{
+  std::unique_ptr<CheatList> list;
+  {
+    std::unique_lock lock(s_cheats_mutex);
+    if (!s_cheats.empty())
+    {
+      list = std::make_unique<CheatList>();
+      for (const CheatCode& code : s_cheats)
+        list->AddCode(code);
+    }
+  }
+
+  // Codes that hold a value in place let go of it when they are switched off.
+  if (const CheatList* old = System::GetCheatList())
+  {
+    for (u32 i = 0; i < old->GetCodeCount(); i++)
+    {
+      const CheatCode& code = old->GetCode(i);
+      bool kept = false;
+      for (u32 j = 0; list && j < list->GetCodeCount(); j++)
+        kept |= (list->GetCode(j).instructions.size() == code.instructions.size() &&
+                 std::equal(code.instructions.begin(), code.instructions.end(), list->GetCode(j).instructions.begin(),
+                            [](const auto& a, const auto& b) { return a.bits == b.bits; }));
+      if (code.enabled && !kept)
+        code.ApplyOnDisable();
+    }
+  }
+
+  System::SetCheatList(std::move(list));
+}
+
+std::optional<std::vector<u8>> AndroidHost::ReadMemory(u32 address, u32 length)
+{
+  std::optional<std::vector<u8>> ret;
+  Host::RunOnCPUThread(
+    [address, length, &ret]() {
+      if (!System::IsValid() || address > Bus::g_ram_size || length > Bus::g_ram_size - address)
+        return;
+      ret.emplace(Bus::g_ram + address, Bus::g_ram + address + length);
+    },
+    true);
+  return ret;
+}
+
+bool AndroidHost::WriteMemory(u32 address, u32 size, u32 value)
+{
+  bool ok = false;
+  Host::RunOnCPUThread(
+    [address, size, value, &ok]() {
+      if (!System::IsValid() || address > Bus::g_ram_size || size > Bus::g_ram_size - address)
+        return;
+
+      // Through the CPU, so recompiled code from the bytes written is thrown away.
+      switch (size)
+      {
+        case 1:
+          ok = CPU::SafeWriteMemoryByte(address, static_cast<u8>(value));
+          break;
+        case 2:
+          ok = CPU::SafeWriteMemoryHalfWord(address, static_cast<u16>(value));
+          break;
+        case 4:
+          ok = CPU::SafeWriteMemoryWord(address, value);
+          break;
+        default:
+          break;
+      }
+    },
+    true);
+  return ok;
 }
 
 void AndroidHost::OnPadVibration(u32 pad_index, float large_motor, float small_motor)
@@ -565,6 +754,13 @@ std::optional<std::time_t> Host::GetResourceFileTimestamp(std::string_view filen
   }
 
   return sd.ModificationTime;
+}
+
+void Host::OnGameChanged(const std::string& disc_path, const std::string& game_serial, const std::string& game_name)
+{
+  // The core drops the cheats when the game changes.
+  if (System::IsValidOrInitializing())
+    AndroidHost::InstallCheats();
 }
 
 void Host::OnSystemStarting()
