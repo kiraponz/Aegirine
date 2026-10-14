@@ -48,6 +48,19 @@ data class Game(
 
     /** Upper-case extension, e.g. "CHD". */
     val format: String get() = fileName.substringAfterLast('.', "").uppercase()
+
+    /** Disc images carry a serial for the core to read; executables and PSFs have none. */
+    private val needsSerial: Boolean get() = format !in SERIAL_LESS_FORMATS
+
+    /** Shown in the library: the core knows the disc, or the file isn't a disc at all. */
+    val recognized: Boolean get() = !needsSerial || serial != null
+
+    /** The core has looked and found no PS1 disc: a BIOS, a PS2 image or some other file. Kept under its own heading. */
+    val unrecognized: Boolean get() = needsSerial && serialRead && serial == null
+
+    private companion object {
+        val SERIAL_LESS_FORMATS = setOf("EXE", "PSEXE", "PS-EXE", "PSF", "MINIPSF")
+    }
 }
 
 /** How the library orders its games. Ties fall back to the title. */

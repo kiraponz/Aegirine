@@ -36,10 +36,12 @@ data class LibraryUiState(
     val hasGameFolder: Boolean = false,
     /** Null until the cached list has been read. */
     val games: List<Game>? = null,
+    /** Files the core found no PS1 disc in; they sit under their own heading at the end. */
+    val unrecognized: List<Game> = emptyList(),
     val refreshing: Boolean = false,
     val sort: LibrarySort = LibrarySort.RecentlyPlayed,
     val query: String = "",
-    /** Games in the folder before the search; zero shows the empty-folder state rather than "no matches". */
+    /** Files in the folder before the search, recognized or not; zero shows the empty-folder state rather than "no matches". */
     val gameCount: Int = 0,
     val launchRequest: LaunchRequest? = null,
     val settingsRequest: GameSettingsRequest? = null,
@@ -69,17 +71,27 @@ class LibraryViewModel(
     /** Favorites first, then games with a suspend state, then the chosen order; only games matching the search. */
     private val shown = combine(games, libraryRepository.sort, query) { games, sort, query ->
         val words = query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
-        val matching = games.filter { game ->
+        fun List<Game>.matching() = filter { game ->
             words.all { word ->
                 word in game.title.lowercase() ||
                     word in game.fileName.lowercase() ||
                     game.serial?.lowercase()?.contains(word) == true
             }
         }
-        Triple(matching.sortedWith(compareByDescending<Game> { it.record.favorite }
-            .thenByDescending { it.resumable }
-            .then(sort.comparator())), games.size, sort)
+        // Files whose serial isn't read yet are in neither list, so a scan doesn't flash BIOS files in.
+        val recognized = games.filter { it.recognized }
+        val unrecognized = games.filter { it.unrecognized }
+        Shown(
+            games = recognized.matching().sortedWith(compareByDescending<Game> { it.record.favorite }
+                .thenByDescending { it.resumable }
+                .then(sort.comparator())),
+            unrecognized = unrecognized.matching().sortedBy { it.fileName.lowercase() },
+            count = recognized.size + unrecognized.size,
+            sort = sort,
+        )
     }
+
+    private class Shown(val games: List<Game>, val unrecognized: List<Game>, val count: Int, val sort: LibrarySort)
 
     val uiState: StateFlow<LibraryUiState> = combine(
         biosRepository.available.catch { emit(null) },
@@ -91,9 +103,10 @@ class LibraryViewModel(
         transient.copy(
             bios = bios,
             hasGameFolder = folder != null,
-            games = shown.first,
-            gameCount = shown.second,
-            sort = shown.third,
+            games = shown.games,
+            unrecognized = shown.unrecognized,
+            gameCount = shown.count,
+            sort = shown.sort,
             refreshing = refreshing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())

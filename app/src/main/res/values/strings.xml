@@ -117,6 +117,8 @@
     <string name="library_search">Search</string>
     <string name="library_search_close">Close search</string>
     <string name="library_search_hint">Title or serial</string>
+    <string name="library_unrecognized">Unrecognized files (%1$d)</string>
+    <string name="library_unrecognized_summary">Not PS1 discs the emulator knows: BIOS files, PS2 images or other files</string>
     <string name="library_no_matches">No games match</string>
     <string name="library_sort">Sort</string>
     <string name="library_sort_recently_played">Recently played</string>

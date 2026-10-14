@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -46,6 +48,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -173,6 +176,7 @@ private fun LibraryContent(
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var searching by remember { mutableStateOf(false) }
+    var unrecognizedOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Game?>(null) }
     state.shortcutIconRequest?.let { request ->
         ShortcutIconDialog(request, onChosen = onShortcutIconChosen, onDismiss = onShortcutIconDismissed)
@@ -277,8 +281,9 @@ private fun LibraryContent(
                     actionText = stringResource(R.string.library_select_game_folder),
                     onAction = onPickGameFolder,
                 )
-                games.isEmpty() && state.gameCount > 0 -> EmptyMessage(stringResource(R.string.library_no_matches))
-                games.isEmpty() -> if (!state.refreshing) {
+                games.isEmpty() && state.unrecognized.isEmpty() && state.gameCount > 0 ->
+                    EmptyMessage(stringResource(R.string.library_no_matches))
+                games.isEmpty() && state.unrecognized.isEmpty() -> if (!state.refreshing) {
                     EmptyState(
                         text = stringResource(R.string.library_empty),
                         actionText = stringResource(R.string.library_change_game_folder),
@@ -309,6 +314,32 @@ private fun LibraryContent(
                             onRename = { renaming = game },
                             onResetTitle = { onRenamed(game, "") },
                         )
+                    }
+                    if (state.unrecognized.isNotEmpty()) {
+                        item(key = "unrecognized-header") {
+                            ListItem(
+                                headlineContent = {
+                                    Text(stringResource(R.string.library_unrecognized, state.unrecognized.size))
+                                },
+                                supportingContent = { Text(stringResource(R.string.library_unrecognized_summary)) },
+                                trailingContent = {
+                                    Icon(
+                                        if (unrecognizedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = null,
+                                    )
+                                },
+                                modifier = Modifier.clickable { unrecognizedOpen = !unrecognizedOpen },
+                            )
+                        }
+                        if (unrecognizedOpen) {
+                            items(state.unrecognized, key = { "unrecognized/" + it.uri }) { game ->
+                                ListItem(
+                                    headlineContent = { Text(game.fileName, maxLines = 2) },
+                                    supportingContent = { Text(game.fileDetails(), maxLines = 1) },
+                                    modifier = Modifier.clickable { onGameClick(game) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -449,6 +480,13 @@ private val LibrarySort.labelRes: Int
         LibrarySort.RecentlyAdded -> R.string.library_sort_recently_added
         LibrarySort.Size -> R.string.library_sort_size
     }
+
+/** Format and size, e.g. "ISO · 4.3 GB". */
+@Composable
+private fun Game.fileDetails(): String {
+    val size = Formatter.formatShortFileSize(LocalContext.current, sizeBytes)
+    return listOfNotNull(format.ifEmpty { null }, size.takeIf { sizeBytes > 0 }).joinToString(" · ")
+}
 
 /** Serial, format and size, then last played and play time, e.g. "SLUS-20312 · CHD · 2.1 GB". */
 @Composable
