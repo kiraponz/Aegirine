@@ -9,6 +9,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -138,6 +142,9 @@ fun LibraryScreen(
         onQueryChanged = viewModel::onQueryChanged,
         onFavoriteToggled = viewModel::onFavoriteToggled,
         onRenamed = viewModel::onRenamed,
+        onDiscPicked = viewModel::onDiscPicked,
+        onDiscardConfirmed = viewModel::onDiscardConfirmed,
+        onDiscardDismissed = viewModel::onDiscardDismissed,
         onAddShortcut = viewModel::onAddShortcutClicked,
         onShortcutIconChosen = viewModel::onShortcutIconChosen,
         onShortcutIconDismissed = viewModel::onShortcutIconDismissed,
@@ -169,6 +176,9 @@ private fun LibraryContent(
     onQueryChanged: (String) -> Unit,
     onFavoriteToggled: (Game) -> Unit,
     onRenamed: (Game, String) -> Unit,
+    onDiscPicked: (LibraryEntry, Game) -> Unit,
+    onDiscardConfirmed: () -> Unit,
+    onDiscardDismissed: () -> Unit,
     onAddShortcut: (Game) -> Unit,
     onShortcutIconChosen: (SaveIconChoice?) -> Unit,
     onShortcutIconDismissed: () -> Unit,
@@ -178,6 +188,28 @@ private fun LibraryContent(
     var searching by remember { mutableStateOf(false) }
     var unrecognizedOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Game?>(null) }
+    var choosingDisc by remember { mutableStateOf<LibraryEntry?>(null) }
+    choosingDisc?.let { entry ->
+        DiscDialog(
+            entry = entry,
+            onPick = {
+                choosingDisc = null
+                onDiscPicked(entry, it)
+            },
+            onDismiss = { choosingDisc = null },
+        )
+    }
+    state.discardRequest?.let { disc ->
+        AlertDialog(
+            onDismissRequest = onDiscardDismissed,
+            title = { Text(stringResource(R.string.library_discard_title)) },
+            text = { Text(stringResource(R.string.library_discard_text)) },
+            confirmButton = {
+                TextButton(onClick = onDiscardConfirmed) { Text(stringResource(R.string.library_discard_confirm)) }
+            },
+            dismissButton = { TextButton(onClick = onDiscardDismissed) { Text(stringResource(R.string.settings_cancel)) } },
+        )
+    }
     state.shortcutIconRequest?.let { request ->
         ShortcutIconDialog(request, onChosen = onShortcutIconChosen, onDismiss = onShortcutIconDismissed)
     }
@@ -313,6 +345,7 @@ private fun LibraryContent(
                             onSettings = { onGameSettingsClick(game) },
                             onFavoriteToggled = { onFavoriteToggled(game) },
                             onAddShortcut = { onAddShortcut(game) },
+                            onChooseDisc = { choosingDisc = entry }.takeIf { entry.discCount > 1 },
                             onRename = { renaming = game },
                             onResetTitle = { onRenamed(game, "") },
                         )
@@ -367,6 +400,7 @@ private fun GameRow(
     onSettings: () -> Unit,
     onFavoriteToggled: () -> Unit,
     onAddShortcut: () -> Unit,
+    onChooseDisc: (() -> Unit)?,
     onRename: () -> Unit,
     onResetTitle: () -> Unit,
 ) {
@@ -401,6 +435,15 @@ private fun GameRow(
             modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
         )
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (onChooseDisc != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.library_choose_disc)) },
+                    onClick = {
+                        menuOpen = false
+                        onChooseDisc()
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.library_add_shortcut)) },
                 onClick = {
@@ -463,6 +506,29 @@ private fun ShortcutIconDialog(request: ShortcutIconRequest, onChosen: (SaveIcon
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_shortcut_icon_cancel)) } },
+    )
+}
+
+/** The discs of a game, the one a tap starts marked; picking one starts the game from it. */
+@Composable
+private fun DiscDialog(entry: LibraryEntry, onPick: (Game) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.library_choose_disc)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                entry.discs.forEach { disc ->
+                    ListItem(
+                        headlineContent = { Text(disc.discTitle, maxLines = 4) },
+                        leadingContent = { RadioButton(selected = disc.uri == entry.game.uri, onClick = null) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { onPick(disc) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
     )
 }
 
@@ -574,7 +640,7 @@ private fun LibraryContentPreview() {
         LibraryContent(
             state = LibraryUiState(
                 hasGameFolder = true,
-                games = listOf(LibraryEntry(Game(Uri.EMPTY, "Example Game (USA).chd", "SLUS-20312", true, 2_100_000_000L), 1, "example")),
+                games = listOf(LibraryEntry(Game(Uri.EMPTY, "Example Game (USA).chd", "SLUS-20312", true, 2_100_000_000L), listOf(Game(Uri.EMPTY, "Example Game (USA).chd", "SLUS-20312", true, 2_100_000_000L)), "example")),
             ),
             snackbarHostState = SnackbarHostState(),
             onOpenSettings = {},
@@ -588,6 +654,9 @@ private fun LibraryContentPreview() {
             onQueryChanged = {},
             onFavoriteToggled = {},
             onRenamed = { _, _ -> },
+            onDiscPicked = { _, _ -> },
+            onDiscardConfirmed = {},
+            onDiscardDismissed = {},
             onAddShortcut = {},
             onShortcutIconChosen = {},
             onShortcutIconDismissed = {},

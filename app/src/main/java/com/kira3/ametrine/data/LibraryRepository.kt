@@ -141,6 +141,12 @@ class LibraryRepository(
     suspend fun setCustomTitle(game: Game, title: String) =
         records.update(game.recordKey) { it.copy(customTitle = title.trim().ifEmpty { null }) }
 
+    /** Drops the suspended game of [dataSerial] (see [Game.dataSerial]), so the next start begins at the start. */
+    suspend fun discardSuspendState(dataSerial: String) {
+        withContext(Dispatchers.IO) { core.suspendStateFile(dataSerial)?.delete() }
+        resumeChanges.value++
+    }
+
     /** Called when a game is started, so "recently played" is right before the first play time arrives. */
     suspend fun markPlayed(game: Game) =
         records.update(game.recordKey) { it.copy(lastPlayed = System.currentTimeMillis(), lastDisc = game.uri.toString()) }

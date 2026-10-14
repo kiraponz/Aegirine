@@ -32,7 +32,9 @@ data class LaunchRequest(val gameUri: Uri, val serial: String?)
 data class GameSettingsRequest(val serial: String, val title: String)
 
 /** One row of the library: a game, or every disc of a multi-disc game. [game] is the disc a tap starts. */
-class LibraryEntry(val game: Game, val discCount: Int, val key: String)
+class LibraryEntry(val game: Game, val discs: List<Game>, val key: String) {
+    val discCount: Int get() = discs.size
+}
 
 data class LibraryUiState(
     val bios: Bios? = null,
@@ -49,6 +51,8 @@ data class LibraryUiState(
     val launchRequest: LaunchRequest? = null,
     val settingsRequest: GameSettingsRequest? = null,
     val shortcutIconRequest: ShortcutIconRequest? = null,
+    /** A disc picked while another disc of the game has a suspended game: starting it would discard that. */
+    val discardRequest: Game? = null,
     val message: LibraryMessage? = null,
 )
 
@@ -85,7 +89,8 @@ class LibraryViewModel(
         // The discs of a game are one row; a tap starts the one that was in the drive last, else the first.
         val entries = recognized.groupBy { it.groupSerial ?: it.uri.toString() }.map { (key, discs) ->
             val lastDisc = discs.firstOrNull { it.uri.toString() == it.record.lastDisc }
-            LibraryEntry(lastDisc ?: discs.minBy { it.discIndex }, discs.size, key) to discs
+            val ordered = discs.sortedBy { it.discIndex }
+            LibraryEntry(lastDisc ?: ordered.first(), ordered, key) to discs
         }
         Shown(
             games = entries.filter { (_, discs) -> discs.any { it.matches() } }.map { it.first }
@@ -171,6 +176,26 @@ class LibraryViewModel(
             transient.update { it.copy(launchRequest = LaunchRequest(game.uri, game.dataSerial)) }
         }
     }
+
+    /** A disc picked from the library's list for [entry]; the entry's own disc continues the suspended game. */
+    fun onDiscPicked(entry: LibraryEntry, disc: Game) {
+        if (disc.uri != entry.game.uri && entry.game.resumable) {
+            transient.update { it.copy(discardRequest = disc) }
+        } else {
+            onGameClicked(disc)
+        }
+    }
+
+    fun onDiscardConfirmed() {
+        val disc = uiState.value.discardRequest ?: return
+        transient.update { it.copy(discardRequest = null) }
+        viewModelScope.launch {
+            disc.dataSerial?.let { runCatching { libraryRepository.discardSuspendState(it) } }
+            onGameClicked(disc)
+        }
+    }
+
+    fun onDiscardDismissed() = transient.update { it.copy(discardRequest = null) }
 
     /** Starts the BIOS itself, with no disc: the PS2 system menu. */
     fun onBootBiosClicked() {

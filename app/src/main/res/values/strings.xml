@@ -121,6 +121,10 @@
     <string name="library_search">Search</string>
     <string name="library_search_close">Close search</string>
     <string name="library_search_hint">Title or serial</string>
+    <string name="library_choose_disc">Choose disc</string>
+    <string name="library_discard_title">Discard the suspended game?</string>
+    <string name="library_discard_text">The suspended game is on another disc. Starting this disc discards it.</string>
+    <string name="library_discard_confirm">Discard and start</string>
     <string name="library_discs">%1$d discs</string>
     <string name="library_unrecognized">Unrecognized files (%1$d)</string>
     <string name="library_unrecognized_summary">Not PS1 discs the emulator knows: BIOS files, PS2 images or other files</string>
