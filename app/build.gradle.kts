@@ -7,14 +7,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// The ARMSX2 commit the core is built from, shown in About so the source of a release can be
-// found. A source archive without .git has no commit; scripts/make-source-archive.sh writes it
-// to external/armsx2.commit instead.
-val coreCommit: String = rootProject.file("external/armsx2.commit").takeIf { it.isFile }?.readText()?.trim()
-    ?: providers.exec {
-        commandLine("git", "-C", rootProject.file("external/armsx2").path, "rev-parse", "HEAD")
-        isIgnoreExitValue = true
-    }.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+// The commit of the emulation core, shown in About. No core is wired in yet.
+val coreCommit = "unknown"
 
 // The release signing key, from keystore.properties at the root (never committed; see
 // RELEASING.md). Without it a release build is unsigned.
@@ -29,7 +23,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kira3.ametrine"
+        applicationId = "com.kira3.aegirine"
         minSdk = 29
         targetSdk = 37
         versionCode = 1
@@ -64,15 +58,6 @@ android {
         }
     }
 
-    packaging {
-        jniLibs {
-            // libadrenotools' hook .so files must be extracted to nativeLibraryDir at install time.
-            useLegacyPackaging = true
-            // ARMSX2's screensavers and Flurry background, which the core build always makes;
-            // both are out of scope for v1, and their licenses would need listing if shipped.
-            excludes += setOf("**/libflurry.so", "**/libsavers.so")
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

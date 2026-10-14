@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Ametrine"
+rootProject.name = "Aegirine"
 include(":app")
 include(":emucore")

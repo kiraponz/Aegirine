@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Ametrine</string>
+    <string name="app_name">Aegirine</string>
 
     <!-- Common -->
     <string name="navigate_back">Back</string>
@@ -58,7 +58,7 @@
     <string name="rewind_ago_seconds">%1$d s ago</string>
     <string name="rewind_ago_minutes">%1$d min ago</string>
     <string name="rewind_failed">Could not rewind</string>
-    <string name="emulation_screenshot_saved">Screenshot saved to Pictures/Ametrine</string>
+    <string name="emulation_screenshot_saved">Screenshot saved to Pictures/Aegirine</string>
     <string name="emulation_screenshot_failed">Could not save the screenshot</string>
 
     <!-- In-game menu -->
@@ -887,7 +887,7 @@
     <string name="about_legal">This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to redistribute it under the terms of the GNU General Public License, version 3 or later.</string>
     <string name="about_trademark">Ametrine is not affiliated with Sony Interactive Entertainment, PCSX2 or ARMSX2. PlayStation and PS2 are trademarks of Sony Interactive Entertainment Inc.</string>
     <string name="about_no_browser">No app can open this link</string>
-    <string name="about_source_url" translatable="false">https://github.com/kiraponz/Ametrine</string>
+    <string name="about_source_url" translatable="false">https://github.com/kiraponz/Aegirine</string>
     <string name="about_core_url" translatable="false">https://github.com/kiraponz/ARMSX2/tree/%1$s</string>
     <string name="licenses_title">Open source licenses</string>
     <string name="licenses_group_core">Emulation core</string>

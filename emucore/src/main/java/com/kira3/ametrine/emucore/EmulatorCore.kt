@@ -21,8 +21,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kr.co.iefriends.pcsx2.NativeApp
-import org.libsdl.app.HIDDeviceManager
-import org.libsdl.app.SDLControllerManager
 import java.io.File
 
 /**
@@ -96,11 +94,6 @@ class EmulatorCore(context: Context) {
                 .onFailure { Log.w(TAG, "Probing the GL driver failed", it) }
                 .getOrNull()
                 ?.let { NativeApp.setAutoRendererGpuStrings(it.vendor.orEmpty(), it.renderer.orEmpty(), it.version.orEmpty()) }
-
-            // SDL's Java side, which the core's SDL gamepad input talks to.
-            SDLControllerManager.nativeSetupJNI()
-            SDLControllerManager.initialize()
-            HIDDeviceManager.acquire(appContext)
         }
         initialized = true
     }

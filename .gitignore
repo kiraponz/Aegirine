@@ -19,7 +19,7 @@ local.properties
 *.keystore
 keystore.properties
 
-# PS2 BIOS / game images (copyrighted; never commit)
+# BIOS / game images (copyrighted; never commit)
 /bios/
 *.iso
 *.chd
@@ -31,5 +31,3 @@ keystore.properties
 /CLAUDE.md
 /docs/
 
-# Written into source archives only (scripts/make-source-archive.sh)
-/external/armsx2.commit

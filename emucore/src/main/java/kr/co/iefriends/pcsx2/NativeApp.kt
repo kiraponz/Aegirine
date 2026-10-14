@@ -208,14 +208,6 @@ internal object NativeApp {
         }
     }
 
-    /** The other CHDs in the same SAF folder as [uriString], for multi-file CHD sets. */
-    @JvmStatic
-    fun findSiblingChds(uriString: String): Array<String> {
-        val ctx = context ?: return emptyArray()
-        return runCatching { ContentChdFiles.findSiblings(ctx.contentResolver, Uri.parse(uriString)) }
-            .getOrDefault(emptyArray())
-    }
-
     /** Fallback for native mkdir, which FUSE can deny where java.io.File succeeds. */
     @JvmStatic
     fun createDirectoryPath(path: String?): Boolean {

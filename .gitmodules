@@ -1,6 +1,0 @@
-[submodule "external/armsx2"]
-	path = external/armsx2
-	url = https://github.com/kiraponz/ARMSX2.git
-	shallow = true
-	ignore = dirty
-	branch = ametrine

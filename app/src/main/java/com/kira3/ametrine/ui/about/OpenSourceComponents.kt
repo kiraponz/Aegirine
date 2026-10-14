@@ -156,7 +156,7 @@ fun coreSourceUrl(commit: String) = "https://github.com/kiraponz/ARMSX2/tree/$co
 
 /** This app itself, for its own license from About. */
 val ametrineComponent = OpenSourceComponent(
-    "ametrine", "Ametrine", "GPL-3.0-or-later", SOURCE_URL, listOf("gpl-3.0.txt"),
+    "aegirine", "Aegirine", "GPL-3.0-or-later", SOURCE_URL, listOf("gpl-3.0.txt"),
     notice = "Copyright 2026 Kira",
 )
 
