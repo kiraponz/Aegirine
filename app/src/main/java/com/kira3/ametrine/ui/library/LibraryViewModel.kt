@@ -82,7 +82,7 @@ class LibraryViewModel(
     }
 
     val uiState: StateFlow<LibraryUiState> = combine(
-        biosRepository.selected.catch { emit(null) },
+        biosRepository.available.catch { emit(null) },
         libraryRepository.gameFolder,
         shown,
         libraryRepository.refreshing,

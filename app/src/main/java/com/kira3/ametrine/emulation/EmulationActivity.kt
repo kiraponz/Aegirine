@@ -147,7 +147,6 @@ class EmulationActivity : ComponentActivity() {
     private var bufferHeight = 0
 
     /** Holds Triangle+Cross through boot while auto progressive scan is on. */
-    private var progressiveScanJob: Job? = null
 
     private val screenshots by lazy { Screenshots(applicationContext, core) }
 
@@ -288,7 +287,7 @@ class EmulationActivity : ComponentActivity() {
                             null
                         },
                         floatingSticks = settings?.controls?.stickMode == 1,
-                        gameAspect = settings?.output?.let { gameAspectOf(it.aspectRatio, it.customAspectRatio) },
+                        gameAspect = settings?.display?.let(::gameAspectOf),
                         opacity = (settings?.controls?.padOpacity ?: 100) / 100f,
                         haptics = settings?.controls?.padHaptics != false,
                         edits = padEdits,
@@ -316,7 +315,7 @@ class EmulationActivity : ComponentActivity() {
                     if (serial != null && settings?.gemini?.memosVisible == true && memoList.isNotEmpty()) {
                         MemoOverlay(memoList, memoActions)
                     }
-                    val gameAspect = settings?.output?.let { gameAspectOf(it.aspectRatio, it.customAspectRatio) }
+                    val gameAspect = settings?.display?.let(::gameAspectOf)
                     val playingMacro by macroPlayer.playing.collectAsState()
                     if (recordingSeconds >= 0) {
                         MacroStatus(
@@ -449,14 +448,11 @@ class EmulationActivity : ComponentActivity() {
         val settings = container.settingsRepository
         val overrides = serial?.let { settings.loadOverrides(it) } ?: SettingsOverrides()
         val global = settings.loadGlobal()
-        val gameBios = SettingsJson.merge(global, overrides).system.biosFilename
-            .takeIf { it.isNotEmpty() && File(core.biosDir, it).isFile }
-        val bios = gameBios ?: container.appPreferences.biosFileName.first()
-        if (bios == null) {
+        // The core picks a BIOS for the game's region (or the game's own, from its settings).
+        if (withContext(Dispatchers.IO) { container.biosRepository.installed().isEmpty() }) {
             finishWithMessage(getString(R.string.emulation_bios_missing))
             return false
         }
-        core.setBios(bios)
         apply(global, overrides)
         applyEmulationOrientation()
         applyOutputScale()
@@ -464,12 +460,6 @@ class EmulationActivity : ComponentActivity() {
         suspendFile = suspended
         core.setBootSaveState(suspended)
         serial?.let { withContext(Dispatchers.IO) { core.clearRewindPoints(it) } }
-        // The hold would press into the game that was restored, not one that is starting.
-        if (suspended == null && SettingsJson.merge(global, overrides).output.autoProgressiveScan) {
-            startAutoProgressiveScanHold()
-        } else {
-            stopAutoProgressiveScanHold()
-        }
         customDriverInUse = useVulkanDriver(global, SettingsJson.merge(global, overrides))
 
         startCheats()
@@ -508,7 +498,6 @@ class EmulationActivity : ComponentActivity() {
     }
 
     private fun onVmStopped(gameUri: Uri, error: String?) {
-        stopAutoProgressiveScanHold()
         val failedDriver = customDriverInUse
         when {
             // The custom driver loaded but the game still could not start (e.g. the GPU could
@@ -624,55 +613,6 @@ class EmulationActivity : ComponentActivity() {
             val saved = screenshots.capture(serial)
             showMessage(getString(if (saved) R.string.emulation_screenshot_saved else R.string.emulation_screenshot_failed))
         }
-    }
-
-    /**
-     * Holds Triangle+Cross through boot, the combo some games probe to offer 480p
-     * progressive scan. Purely synthetic pad input; games without the prompt ignore it.
-     */
-    private fun startAutoProgressiveScanHold() {
-        stopAutoProgressiveScanHold()
-        // Not on the emulation thread: runVm blocks it for the whole session.
-        progressiveScanJob = lifecycleScope.launch(Dispatchers.Default) {
-            var held = false
-            try {
-                var waited = 0L
-                while (!core.hasActiveVm && isActive && waited < AUTO_PROGRESSIVE_VM_WAIT_MS) {
-                    delay(100)
-                    waited += 100
-                }
-                if (!core.hasActiveVm) return@launch
-                held = true
-                // Re-assert on a short interval so the game never samples a gap
-                // (e.g. across the pad re-init during boot). Stops soon after the
-                // game's ELF starts; holding into menus would fight the player.
-                var elapsed = 0L
-                var sinceElf = -1L
-                while (elapsed < AUTO_PROGRESSIVE_HOLD_MS && isActive) {
-                    if (!core.hasActiveVm) return@launch
-                    core.setPadButton(PORT, PadButton.Triangle, true)
-                    core.setPadButton(PORT, PadButton.Cross, true)
-                    delay(AUTO_PROGRESSIVE_REASSERT_MS)
-                    elapsed += AUTO_PROGRESSIVE_REASSERT_MS
-                    val elfRunning = core.gameCrc.let { it.length == 8 && it != "00000000" }
-                    if (elfRunning) {
-                        sinceElf = if (sinceElf < 0) 0 else sinceElf + AUTO_PROGRESSIVE_REASSERT_MS
-                        if (sinceElf >= AUTO_PROGRESSIVE_POST_ELF_MS) break
-                    }
-                }
-            } finally {
-                // Release on every exit path, cancellation included.
-                if (held && core.hasActiveVm) {
-                    core.setPadButton(PORT, PadButton.Triangle, false)
-                    core.setPadButton(PORT, PadButton.Cross, false)
-                }
-            }
-        }
-    }
-
-    private fun stopAutoProgressiveScanHold() {
-        progressiveScanJob?.cancel()
-        progressiveScanJob = null
     }
 
     private fun openMenu() {
@@ -1269,8 +1209,8 @@ class EmulationActivity : ComponentActivity() {
             }
         }
 
-        override fun setShowFps(show: Boolean) = updateSetting("osd.osdShowFps") {
-            it.copy(osd = it.osd.copy(osdShowFps = show))
+        override fun setShowFps(show: Boolean) = updateSetting("osd.showFps") {
+            it.copy(osd = it.osd.copy(showFps = show))
         }
 
         override fun setFastForwardButton(show: Boolean) = updateSetting("frameLimit.fastForwardButton") {
@@ -1430,7 +1370,6 @@ class EmulationActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         core.rumbleHandler = null
-        stopAutoProgressiveScanHold()
         // configChanges keeps rotation from recreating this activity, so being destroyed
         // means the game is over.
         if (emulationThread != null && core.hasActiveVm) core.shutdown()
@@ -1512,14 +1451,6 @@ class EmulationActivity : ComponentActivity() {
         /** Player 1. Both the touch pad and controllers play as player 1 for now. */
         private const val PORT = 0
 
-        /** How long to keep Triangle+Cross held. Some titles probe it well after the PS2 logo. */
-        private const val AUTO_PROGRESSIVE_HOLD_MS = 30_000L
-        /** How often the hold is re-pressed, so the game never samples a gap. */
-        private const val AUTO_PROGRESSIVE_REASSERT_MS = 200L
-        /** Let go this long after the game's ELF starts; holding into menus would fight the player. */
-        private const val AUTO_PROGRESSIVE_POST_ELF_MS = 8_000L
-        /** Pad writes are dropped with no VM, so wait for boot rather than pressing into the void. */
-        private const val AUTO_PROGRESSIVE_VM_WAIT_MS = 15_000L
         private const val EXTRA_GAME_URI = "com.kira3.ametrine.extra.GAME_URI"
         private const val EXTRA_SERIAL = "com.kira3.ametrine.extra.SERIAL"
         private const val EXTRA_EDIT_PAD_ONLY = "com.kira3.ametrine.extra.EDIT_PAD_ONLY"

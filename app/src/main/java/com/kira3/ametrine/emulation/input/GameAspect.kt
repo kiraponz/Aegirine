@@ -1,16 +1,17 @@
 package com.kira3.ametrine.emulation.input
 
+import com.kira3.ametrine.emucore.settings.DisplaySettings
+
 /**
- * The width / height of the picture for a DisplaySettings.aspectRatio value, or null when it
- * has no fixed shape (Stretch fills the screen).
+ * The width / height of the picture for [display]'s aspect ratio, or null when it has no fixed
+ * shape (it fills the screen). The game's own ratio and square pixels are taken as 4:3, which
+ * nearly every game is.
  */
-fun gameAspectOf(aspectRatio: Int, customAspectRatio: Float): Float? = when (aspectRatio) {
-    0 -> null
-    3 -> 16f / 9f
-    4 -> 10f / 7f
-    5 -> 21f / 9f
-    6 -> 20f / 9f
-    7 -> 19.5f / 9f
-    8 -> customAspectRatio.takeIf { it > 0f }
+fun gameAspectOf(display: DisplaySettings): Float? = when (display.aspectRatio) {
+    "Auto (Match Window)" -> null
+    "16:9" -> 16f / 9f
+    "19:9" -> 19f / 9f
+    "20:9" -> 20f / 9f
+    "Custom" -> (display.customAspectNumerator.toFloat() / display.customAspectDenominator).takeIf { it > 0f }
     else -> 4f / 3f
 }

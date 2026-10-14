@@ -172,7 +172,7 @@ fun InGameMenu(
                 MenuAction(stringResource(R.string.menu_exit), !busy) { confirm = Confirm.Exit }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                MenuSwitch(stringResource(R.string.menu_show_fps), settings.osd.osdShowFps, !busy, actions::setShowFps)
+                MenuSwitch(stringResource(R.string.menu_show_fps), settings.osd.showFps, !busy, actions::setShowFps)
                 MenuSwitch(
                     stringResource(R.string.menu_fast_forward_button),
                     settings.frameLimit.fastForwardButton,

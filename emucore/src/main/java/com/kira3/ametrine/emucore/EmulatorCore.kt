@@ -5,7 +5,9 @@ import android.net.Uri
 import android.system.Os
 import android.util.Log
 import android.view.Surface
+import com.kira3.ametrine.emucore.settings.CoreKeys
 import com.kira3.ametrine.emucore.settings.EmulatorSettings
+import com.kira3.ametrine.emucore.settings.SettingsEffects
 import com.kira3.ametrine.emucore.settings.SettingsJson
 import com.kira3.ametrine.emucore.settings.SettingsOverrides
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +42,7 @@ class EmulatorCore(context: Context) {
      */
     val biosDir: File = File(dataDir, "bios")
 
-    /** Where the core keeps its memory cards. */
+    /** Where the core keeps its memory cards (128 KB `.mcd` files). */
     val memoryCardsDir: File = File(dataDir, "memcards")
 
     /** The save states (`<serial> (<CRC>).<slot>.p2s`), and the resume and rewind states. */
@@ -122,30 +124,23 @@ class EmulatorCore(context: Context) {
     fun setSetting(section: String, key: String, value: String) =
         NativeCore.setSetting(section, key, value)
 
-    /**
-     * Selects the BIOS the next boot loads: a file name inside [biosDir]. It is used for every
-     * console region until each region can have its own (step 5).
-     */
-    fun setBios(fileName: String) {
-        for (key in listOf("PathNTSCJ", "PathNTSCU", "PathPAL")) setSetting("BIOS", key, fileName)
-    }
-
     /** Applies the settings written since the last commit to a running VM. */
     fun commitSettings() = NativeCore.commitSettings()
 
     private val applyMutex = Mutex()
 
+    /** The effective settings the running VM booted with; null when none is running. */
     @Volatile
-    private var lastApplied: EmulatorSettings? = null
+    private var bootSettings: EmulatorSettings? = null
 
     /**
      * Hands the settings to the core: [global], with [overrides] for [serial] (the game about
      * to boot, or the one running). Call it before [runVm], and again whenever settings change
-     * while a game runs.
+     * while a game runs: the running game takes them straight away, except those in
+     * [SettingsEffects.appliesOnNextBoot], which keep what it booted with.
      *
-     * The settings are still ARMSX2's; until they are remade for the core (step 5), only the
-     * renderer, the speeds and the audio output are passed on. The renderer applies on the next
-     * boot; the rest straight away.
+     * The game's BIOS ([com.kira3.ametrine.emucore.settings.SystemSettings.biosFilename]) is
+     * dropped when its file is gone, so the core picks one for the game's region instead.
      */
     suspend fun applySettings(
         global: EmulatorSettings,
@@ -153,36 +148,28 @@ class EmulatorCore(context: Context) {
         serial: String?,
     ) = withContext(Dispatchers.IO) {
         applyMutex.withLock {
-            val effective = SettingsJson.merge(global, overrides)
+            var effective = SettingsJson.merge(global, overrides)
+            val bios = effective.system.biosFilename
+            if (bios.isNotEmpty() && !File(biosDir, bios).isFile) {
+                Log.w(TAG, "BIOS $bios is not installed; the core picks one")
+                effective = effective.copy(system = effective.system.copy(biosFilename = ""))
+            }
+
             val running = NativeCore.hasActiveSystem()
-            // The running VM keeps the renderer it booted with.
-            if (!running) setSetting("GPU", "Renderer", rendererName(effective.output.renderer))
+            val boot = bootSettings
+            if (!running || boot == null) {
+                bootSettings = effective
+            } else {
+                // Changing these under a running game is not safe (the renderer) or does
+                // nothing until a reset (the region, the BIOS).
+                effective = SettingsJson.copyPaths(effective, boot, SettingsEffects.appliesOnNextBoot)
+            }
 
-            val frameLimit = effective.frameLimit
-            val speed = if (frameLimit.frameLimitEnable) frameLimit.nominalSpeedPercent.coerceIn(10, 1000) / 100f else 0f
-            setSetting("Main", "EmulationSpeed", speed)
-            // 0 is as fast as possible, the same as the core's.
-            setSetting("Main", "FastForwardSpeed", frameLimit.fastForwardSpeed.coerceIn(0, 10).toFloat())
-
-            val audio = effective.audio
-            setSetting("Audio", "OutputVolume", audio.audioVolume.coerceIn(0, 200))
-            setSetting("Audio", "FastForwardVolume", audio.audioFastForwardVolume.coerceIn(0, 200))
-            setSetting("Audio", "OutputMuted", audio.audioMuted)
-            setSetting("Audio", "StretchMode", if (audio.audioTimeStretch) "TimeStretch" else "Off")
-            setSetting("Audio", "BufferMS", audio.audioBufferMs.coerceIn(10, 500))
-            setSetting("Audio", "OutputLatencyMS", audio.audioOutputLatencyMs.coerceIn(0, 500))
-
+            for (key in CoreKeys.pinned + CoreKeys.of(effective)) NativeCore.setSetting(key.section, key.key, key.value)
+            portraitRenderTop = effective.output.portraitRenderTop
+            NativeCore.setDisplayLayout(portraitRenderTop, portraitTopInset)
             if (running) commitSettings()
-            lastApplied = effective
         }
-    }
-
-    /** The core's [GPU] Renderer for the app's renderer setting. */
-    private fun rendererName(renderer: String): String = when (renderer) {
-        "opengl" -> "OpenGL"
-        "vulkan" -> "Vulkan"
-        "software" -> "Software"
-        else -> "Automatic"
     }
 
     // ---- Fast forward ----
@@ -202,30 +189,19 @@ class EmulatorCore(context: Context) {
     // ---- BIOS and games ----
 
     /**
-     * Creates the empty card [name] in [memoryCardsDir]: a folder card, or a file card of [sizeMb]
-     * (8, 16, 32 or 64). Needs [initialize]. Blocking I/O. Step 5.
+     * Reads BIOS metadata from [uri], or null if it is not a 512 KB PS1 BIOS. A BIOS the core's
+     * list does not know has [BiosRegion.Unknown]. Blocking I/O.
      */
-    @Suppress("UNUSED_PARAMETER")
-    fun createMemoryCard(name: String, folder: Boolean, sizeMb: Int): Boolean = false
-
-    /** Reads BIOS metadata from [uri], or null if it is not a PS1 BIOS. Blocking I/O. */
     fun readBiosMetadata(uri: Uri): BiosMetadata? {
         val fd = openFd(uri) ?: return null
         val info = NativeCore.getBiosInfoFromFd(fd) ?: return null
-        // TODO(step 5): PS1 regions and versions in BiosMetadata itself.
         val region = when (info.substringBefore('\t').toIntOrNull()) {
             1 -> BiosRegion.Japan
             2 -> BiosRegion.Usa
             3 -> BiosRegion.Europe
             else -> BiosRegion.Unknown
         }
-        return BiosMetadata(
-            versionMajor = 0,
-            versionMinor = 0,
-            region = region,
-            description = info.substringAfter('\t'),
-            zone = "",
-        )
+        return BiosMetadata(region = region, description = info.substringAfter('\t'))
     }
 
     /**
@@ -292,6 +268,7 @@ class EmulatorCore(context: Context) {
         return try {
             NativeCore.runSystem(path)
         } finally {
+            bootSettings = null
             _vmState.value = VmState.Stopped
         }
     }
@@ -398,14 +375,22 @@ class EmulatorCore(context: Context) {
     fun onSurfaceDestroyed() = NativeCore.setSurface(null, 0, 0)
     fun setDisplayRefreshRate(hz: Float) = NativeCore.setDisplayRefreshRate(hz)
 
+    @Volatile
+    private var portraitRenderTop = true
+
+    @Volatile
+    private var portraitTopInset = 0
+
     /**
      * How far to shift a top-aligned portrait render down so it clears the display cutout, in
-     * surface (buffer) pixels. Step 5.
+     * surface (buffer) pixels.
      */
-    @Suppress("UNUSED_PARAMETER")
-    fun setPortraitRenderTopInset(pixels: Int) = Unit
+    fun setPortraitRenderTopInset(pixels: Int) {
+        portraitTopInset = pixels.coerceAtLeast(0)
+        NativeCore.setDisplayLayout(portraitRenderTop, portraitTopInset)
+    }
 
-    /** Keeps the on-screen messages clear of the display cutout. Surface pixels. Step 5. */
+    /** Keeps the on-screen messages clear of the display cutout. Surface pixels. Step 7. */
     @Suppress("UNUSED_PARAMETER")
     fun setOsdSafeAreaInsets(left: Int, top: Int, right: Int, bottom: Int) = Unit
 

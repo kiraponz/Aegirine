@@ -13,7 +13,6 @@ import com.kira3.ametrine.data.BiosRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -22,8 +21,6 @@ import kotlinx.coroutines.launch
 data class BiosUiState(
     /** Null while the BIOS folder is being read. */
     val installed: List<Bios>? = null,
-    /** File name of the selected BIOS. */
-    val selected: String? = null,
     val importing: Boolean = false,
     val invalidFile: Boolean = false,
 )
@@ -33,13 +30,8 @@ class BiosViewModel(private val repository: BiosRepository) : ViewModel() {
     private val importing = MutableStateFlow(false)
     private val invalidFile = MutableStateFlow(false)
 
-    val uiState: StateFlow<BiosUiState> = combine(
-        installed,
-        repository.selectedFileName.catch { emit(null) },
-        importing,
-        invalidFile,
-    ) { installed, selected, importing, invalid ->
-        BiosUiState(installed, selected, importing, invalid)
+    val uiState: StateFlow<BiosUiState> = combine(installed, importing, invalidFile) { installed, importing, invalid ->
+        BiosUiState(installed, importing, invalid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BiosUiState())
 
     init {
@@ -55,10 +47,6 @@ class BiosViewModel(private val repository: BiosRepository) : ViewModel() {
             importing.value = false
             if (bios == null) invalidFile.value = true else reload()
         }
-    }
-
-    fun select(bios: Bios) {
-        viewModelScope.launch { repository.select(bios.fileName) }
     }
 
     fun delete(bios: Bios) {

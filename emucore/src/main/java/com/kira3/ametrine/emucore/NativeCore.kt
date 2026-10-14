@@ -68,6 +68,12 @@ internal object NativeCore {
     @JvmStatic external fun setSurface(surface: Surface?, width: Int, height: Int)
     @JvmStatic external fun setDisplayRefreshRate(hz: Float)
 
+    /**
+     * Where the picture sits: at the top of a portrait surface when [portraitTop], [topMargin]
+     * surface pixels down (clear of the display cutout), else in the middle.
+     */
+    @JvmStatic external fun setDisplayLayout(portraitTop: Boolean, topMargin: Int)
+
     // ---- VM lifecycle ----
 
     /**

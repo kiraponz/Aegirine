@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -126,6 +127,12 @@ extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setSurface)(JNIEnv* env, jclass, j
 extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setDisplayRefreshRate)(JNIEnv*, jclass, jfloat hz)
 {
   AndroidHost::SetDisplayRefreshRate(hz);
+}
+
+extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setDisplayLayout)(JNIEnv*, jclass, jboolean portrait_top,
+                                                                jint top_margin)
+{
+  AndroidHost::SetDisplayLayout(portrait_top, static_cast<u32>(std::max(top_margin, 0)));
 }
 
 extern "C" JNIEXPORT void JNICALL NATIVE_CORE(setPadBind)(JNIEnv*, jclass, jint port, jint index, jfloat value)

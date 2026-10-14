@@ -73,7 +73,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.kira3.ametrine.data.GpuDriver
-import com.kira3.ametrine.emucore.settings.PerformancePreset
 import com.kira3.ametrine.emucore.settings.SettingsValues
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -81,7 +80,6 @@ import kotlin.math.roundToInt
 /** What a row can ask for. Paths are dotted EmulatorSettings paths. */
 interface SettingsActions {
     fun set(path: String, value: Any)
-    fun applyPreset(preset: PerformancePreset)
     fun reset(path: String)
     fun openGpuDriver()
     fun openBios()
@@ -117,7 +115,6 @@ fun SettingRow(
         is TextInput -> TextRow(row, setting, actions)
         GeminiApiKeySetting -> GeminiKeyRow(row)
         GeminiModelSetting -> GeminiModelRow(row, actions)
-        PresetSetting -> PresetRow(row, actions)
         GameBiosSetting -> DialogChoiceRow(row, biosChoice(state), actions)
         GpuDriverSetting -> GpuDriverRow(row, state, actions)
         BiosManageSetting -> BiosManageRow(row, actions)
@@ -152,7 +149,7 @@ private fun biosChoice(state: SettingsUiState): Choice = Choice(
 @Composable
 private fun cardChoice(setting: MemoryCardSlotSetting, state: SettingsUiState, values: SettingsValues): Choice {
     val current = values.string(setting.path!!)
-    // The file system ignores case, so a stored "mcd001.ps2" is the card "Mcd001.ps2": keep the stored
+    // The file system ignores case, so a stored "shared_card_1.mcd" is the card "Shared_Card_1.mcd": keep the stored
     // spelling as the value so that card shows as selected.
     val options = state.cards.map { card ->
         Option(if (card.name.equals(current, ignoreCase = true)) current else card.name, Label.text(card.name))
@@ -823,35 +820,6 @@ private fun TextDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
         },
     )
-}
-
-@Composable
-private fun PresetRow(row: RowParams, actions: SettingsActions) {
-    val matching = remember(row.values) { PerformancePreset.matching(row.values.settings) }
-    val options = PerformancePreset.entries.map {
-        Option(
-            it,
-            Label.res(
-                when (it) {
-                    PerformancePreset.Optimal -> R.string.settings_preset_optimal
-                    PerformancePreset.Fast -> R.string.settings_preset_fast
-                    PerformancePreset.LowEnd -> R.string.settings_preset_low_end
-                },
-            ),
-        )
-    }
-    SegmentedListItem(
-        shapes = row.shapes,
-        colors = settingsListColors(),
-        modifier = row.modifier,
-        supportingContent = {
-            Column {
-                Text(stringResource(if (matching == null) R.string.settings_preset_custom else PresetSetting.summary))
-                Spacer(Modifier.height(12.dp))
-                ConnectedChoice(options, matching, enabled = true) { actions.applyPreset(it as PerformancePreset) }
-            }
-        },
-    ) { Text(stringResource(PresetSetting.title)) }
 }
 
 /** Marks a value the game sets for itself. Tapping it goes back to the global value. */

@@ -248,26 +248,18 @@ fun MemoryCardSavesScreen(
 @Composable
 private fun summary(card: MemoryCard?, listing: com.kira3.ametrine.data.SaveListing?): String {
     if (card == null) return stringResource(R.string.memcards_gone)
-    if (card.isFolder) return stringResource(R.string.memcards_kind_folder)
-    val free = listing?.freeKilobytes
-    val capacity = listing?.capacityKilobytes
-    return if (free != null && capacity != null) {
-        stringResource(R.string.memcards_free_of, free, capacity)
-    } else if (listing?.state == CardState.Blank) {
-        stringResource(R.string.memcards_not_formatted)
-    } else {
-        ""
+    return when (listing?.state) {
+        CardState.Formatted -> stringResource(R.string.memcards_free_of, listing.freeKilobytes / 8, listing.capacityKilobytes / 8)
+        CardState.Unsupported -> stringResource(R.string.memcards_not_formatted)
+        null -> ""
     }
 }
 
 @Composable
 private fun SaveInfo.details(): String {
-    val context = LocalContext.current
-    val date = if (modified > 0) DateFormat.getMediumDateFormat(context).format(Date(modified)) else null
     val parts = listOfNotNull(
         if (title != null) name else null,
-        stringResource(R.string.memcards_save_size, kilobytes),
-        date,
+        pluralStringResource(R.plurals.memcards_save_blocks, kilobytes / 8, kilobytes / 8),
     )
     return parts.joinToString(" · ")
 }

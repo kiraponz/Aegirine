@@ -6,9 +6,9 @@ import com.kira3.ametrine.ui.settings.Label.Companion.res
 import com.kira3.ametrine.ui.settings.Label.Companion.text
 
 /**
- * What each settings category shows. Items follow ARMSX2's settings tabs (see
- * docs/ARMSX2_SETTINGS.md); option values are the stored values, so their order matches
- * the core's enums.
+ * What each settings category shows. Items are the core's settings (docs/CORE_SETTINGS.md)
+ * and the app's own; option values are the stored values, which for the core's settings are
+ * its own names ("Nearest", "Recompiler").
  */
 object SettingsCatalog {
     private val byCategory: Map<SettingsCategory, List<SettingsSection>> by lazy {
@@ -28,20 +28,24 @@ object SettingsCatalog {
     private fun options(vararg labels: Label): List<Option> = labels.mapIndexed { index, label -> Option(index, label) }
 
     private val off = res(R.string.settings_opt_off)
-    private val on = res(R.string.settings_opt_on)
     private val auto = res(R.string.settings_opt_auto)
-    private val normal = res(R.string.settings_opt_normal)
-    private val aggressive = res(R.string.settings_opt_aggressive)
 
-    private val aspectRatios = listOf("4:3", "16:9", "10:7", "21:9", "20:9", "19.5:9").map(::text)
+    /** Options whose stored values are the core's names. */
+    private fun named(vararg pairs: Pair<String, Label>): List<Option> = pairs.map { (value, label) -> Option(value, label) }
 
-    private val roundModes = options(
-        res(R.string.settings_opt_nearest), res(R.string.settings_opt_negative),
-        res(R.string.settings_opt_positive), res(R.string.settings_opt_chop),
+    private val speedups = listOf(
+        Option(1, res(R.string.settings_opt_normal)), Option(2, text("2×")), Option(3, text("3×")), Option(4, text("4×")),
+        Option(6, text("6×")), Option(8, text("8×")), Option(10, text("10×")), Option(0, res(R.string.settings_opt_max)),
     )
 
-    private val vuClampModes = listOf(
-        off, normal, res(R.string.settings_opt_extra), res(R.string.settings_opt_extra_sign), res(R.string.settings_opt_exact),
+    private val textureFilters = named(
+        "Nearest" to res(R.string.settings_opt_nearest),
+        "Bilinear" to res(R.string.settings_opt_bilinear),
+        "BilinearBinAlpha" to res(R.string.settings_opt_bilinear_bin_alpha),
+        "JINC2" to text("JINC2"),
+        "JINC2BinAlpha" to res(R.string.settings_opt_jinc2_bin_alpha),
+        "xBR" to text("xBR"),
+        "xBRBinAlpha" to res(R.string.settings_opt_xbr_bin_alpha),
     )
 
     private fun graphics() = listOf(
@@ -49,38 +53,47 @@ object SettingsCatalog {
             R.string.settings_section_rendering,
             listOf(
                 Choice(
-                    "output.renderer", R.string.settings_renderer, R.string.settings_renderer_summary,
-                    listOf(
-                        Option("auto", auto), Option("opengl", text("OpenGL")),
-                        Option("vulkan", text("Vulkan")), Option("software", res(R.string.settings_opt_software)),
+                    "gpu.renderer", R.string.settings_renderer, R.string.settings_renderer_summary,
+                    named(
+                        "auto" to auto, "opengl" to text("OpenGL"),
+                        "vulkan" to text("Vulkan"), "software" to res(R.string.settings_opt_software),
                     ),
                     inline = true,
                 ),
                 GpuDriverSetting,
-                Choice(
-                    "output.upscaleFloat", R.string.settings_resolution, R.string.settings_resolution_summary,
-                    listOf(
-                        Option(0.5f, text("0.5×")), Option(0.75f, text("0.75×")),
-                        Option(1.0f, res(R.string.settings_opt_native)),
-                        Option(1.25f, text("1.25×")), Option(1.5f, text("1.5×")),
-                        Option(2.0f, text("2× (~720p)")), Option(2.5f, text("2.5×")),
-                        Option(3.0f, text("3× (~1080p)")), Option(4.0f, text("4× (~1440p)")),
-                        Option(5.0f, text("5× (~1800p)")),
-                    ),
+                Toggle(
+                    "output.turnipUbwcHint", R.string.settings_turnip_ubwc, R.string.settings_turnip_ubwc_summary,
+                    visibleWhen = { it.string("output.customDriverId").isNotEmpty() },
                 ),
                 Choice(
-                    "output.aspectRatio", R.string.settings_aspect_ratio,
-                    options = options(
-                        res(R.string.settings_opt_stretch), res(R.string.settings_opt_aspect_auto),
-                        *aspectRatios.toTypedArray(), res(R.string.settings_opt_custom),
+                    "gpu.resolutionScale", R.string.settings_resolution, R.string.settings_resolution_summary,
+                    listOf(
+                        Option(0, res(R.string.settings_opt_match_window)),
+                        Option(1, res(R.string.settings_opt_native)),
+                        Option(2, text("2× (480p)")), Option(3, text("3× (720p)")), Option(4, text("4× (960p)")),
+                        Option(5, text("5× (1200p)")), Option(6, text("6× (1440p)")), Option(8, text("8× (1920p)")),
+                    ),
+                    enabledWhen = { it.string("gpu.renderer") != "software" },
+                ),
+                Choice(
+                    "display.aspectRatio", R.string.settings_aspect_ratio,
+                    options = named(
+                        "Auto (Game Native)" to res(R.string.settings_opt_aspect_game),
+                        "Auto (Match Window)" to res(R.string.settings_opt_stretch),
+                        "4:3" to text("4:3"), "16:9" to text("16:9"), "19:9" to text("19:9"), "20:9" to text("20:9"),
+                        "PAR 1:1" to res(R.string.settings_opt_par_1_1),
+                        "Custom" to res(R.string.settings_opt_custom),
                     ),
                 ),
                 NumberInput(
-                    "output.customAspectRatio", R.string.settings_custom_aspect_ratio, R.string.settings_custom_aspect_ratio_summary,
-                    min = 0.5, max = 4.0, decimal = true,
-                    visibleWhen = { it.int("output.aspectRatio") == 8 },
+                    "display.customAspectNumerator", R.string.settings_custom_aspect_width, min = 1.0, max = 1000.0,
+                    visibleWhen = { it.string("display.aspectRatio") == "Custom" },
                 ),
-                Toggle("emuCore.enableWideScreenPatches", R.string.settings_widescreen_patches, R.string.settings_widescreen_patches_summary),
+                NumberInput(
+                    "display.customAspectDenominator", R.string.settings_custom_aspect_height, min = 1.0, max = 1000.0,
+                    visibleWhen = { it.string("display.aspectRatio") == "Custom" },
+                ),
+                Toggle("gpu.widescreenHack", R.string.settings_widescreen_hack, R.string.settings_widescreen_hack_summary),
                 Choice(
                     "output.orientation", R.string.settings_orientation, R.string.settings_orientation_summary,
                     options(
@@ -89,188 +102,119 @@ object SettingsCatalog {
                     ),
                     inline = true,
                 ),
+                Toggle("output.portraitRenderTop", R.string.settings_portrait_top),
             ),
         ),
         SettingsSection(
-            R.string.settings_section_filtering,
+            R.string.settings_section_enhancements,
             listOf(
-                Choice(
-                    "graphics.textureFiltering", R.string.settings_texture_filtering,
-                    options = options(
-                        res(R.string.settings_opt_nearest), res(R.string.settings_opt_bilinear_forced),
-                        res(R.string.settings_opt_bilinear_ps2), res(R.string.settings_opt_bilinear_no_sprites),
-                    ),
+                Choice("gpu.textureFilter", R.string.settings_texture_filtering, R.string.settings_texture_filtering_summary, textureFilters),
+                Toggle("gpu.trueColor", R.string.settings_true_color, R.string.settings_true_color_summary),
+                Toggle(
+                    "gpu.scaledDithering", R.string.settings_scaled_dithering, R.string.settings_scaled_dithering_summary,
+                    enabledWhen = { !it.boolean("gpu.trueColor") },
                 ),
+                Toggle("gpu.debanding", R.string.settings_debanding, R.string.settings_debanding_summary),
                 Choice(
-                    "graphics.accurateBlendingUnit", R.string.settings_blending, R.string.settings_blending_summary,
-                    options(
-                        res(R.string.settings_opt_minimum), res(R.string.settings_opt_basic), res(R.string.settings_opt_medium),
-                        res(R.string.settings_opt_high), res(R.string.settings_opt_full), res(R.string.settings_opt_maximum),
-                    ),
-                ),
-                Choice(
-                    "graphics.displayBilinear", R.string.settings_display_filter, R.string.settings_display_filter_summary,
-                    options(off, res(R.string.settings_opt_smooth), res(R.string.settings_opt_sharp)),
+                    "gpu.multisamples", R.string.settings_msaa,
+                    options = listOf(Option(1, off), Option(2, text("2×")), Option(4, text("4×")), Option(8, text("8×"))),
                     inline = true,
                 ),
+                Toggle(
+                    "gpu.perSampleShading", R.string.settings_ssaa, R.string.settings_ssaa_summary,
+                    enabledWhen = { it.int("gpu.multisamples") > 1 },
+                ),
+                Toggle("gpu.chromaSmoothing24Bit", R.string.settings_chroma_smoothing, R.string.settings_chroma_smoothing_summary),
+            ),
+        ),
+        SettingsSection(
+            R.string.settings_section_pgxp,
+            listOf(
+                Toggle("gpu.pgxpEnable", R.string.settings_pgxp, R.string.settings_pgxp_summary),
+                pgxpToggle("gpu.pgxpCulling", R.string.settings_pgxp_culling),
+                pgxpToggle("gpu.pgxpTextureCorrection", R.string.settings_pgxp_texture_correction),
+                pgxpToggle("gpu.pgxpColorCorrection", R.string.settings_pgxp_color_correction),
+                pgxpToggle("gpu.pgxpVertexCache", R.string.settings_pgxp_vertex_cache, R.string.settings_pgxp_vertex_cache_summary),
+                pgxpToggle("gpu.pgxpCpu", R.string.settings_pgxp_cpu, R.string.settings_pgxp_cpu_summary),
+                pgxpToggle("gpu.pgxpPreserveProjFp", R.string.settings_pgxp_preserve_proj),
+                pgxpToggle("gpu.pgxpDepthBuffer", R.string.settings_pgxp_depth_buffer, R.string.settings_pgxp_depth_buffer_summary),
             ),
         ),
         SettingsSection(
             R.string.settings_section_display,
             listOf(
                 Choice(
+                    "display.cropMode", R.string.settings_crop_mode,
+                    options = named(
+                        "None" to res(R.string.settings_opt_crop_none),
+                        "Overscan" to res(R.string.settings_opt_crop_overscan),
+                        "Borders" to res(R.string.settings_opt_crop_borders),
+                    ),
+                    inline = true,
+                ),
+                Choice(
+                    "display.deinterlacingMode", R.string.settings_deinterlacing,
+                    options = named(
+                        "Disabled" to res(R.string.settings_opt_deinterlace_off),
+                        "Weave" to res(R.string.settings_opt_deinterlace_weave),
+                        "Blend" to res(R.string.settings_opt_deinterlace_blend),
+                        "Adaptive" to res(R.string.settings_opt_deinterlace_adaptive),
+                    ),
+                ),
+                Choice(
+                    "display.scaling", R.string.settings_display_filter, R.string.settings_display_filter_summary,
+                    named(
+                        "Nearest" to res(R.string.settings_opt_nearest),
+                        "NearestInteger" to res(R.string.settings_opt_nearest_integer),
+                        "BilinearSmooth" to res(R.string.settings_opt_smooth),
+                        "BilinearSharp" to res(R.string.settings_opt_sharp),
+                        "BilinearInteger" to res(R.string.settings_opt_bilinear_integer),
+                    ),
+                ),
+                Toggle("display.force43For24Bit", R.string.settings_force_43_movies, R.string.settings_force_43_movies_summary),
+                Choice(
                     "output.hwScaler", R.string.settings_display_resolution, R.string.settings_display_resolution_summary,
                     listOf(
-                        Option(0, res(R.string.settings_opt_screen)), Option(3, text("3x PS2")),
-                        Option(2, text("2x PS2")), Option(1, text("1x PS2")),
+                        Option(0, res(R.string.settings_opt_screen)), Option(3, text("1440p")),
+                        Option(2, text("960p")), Option(1, text("480p")),
                     ),
                     inline = true,
                 ),
                 Choice(
                     "output.screenResOverride", R.string.settings_screen_res_override, R.string.settings_screen_res_override_summary,
                     listOf(
-                        Option("auto", res(R.string.settings_opt_auto)), Option("2560x1440", text("1440p")),
+                        Option("auto", auto), Option("2560x1440", text("1440p")),
                         Option("1920x1080", text("1080p")), Option("1280x720", text("720p")),
                     ),
                     inline = true,
                 ),
-                Choice(
-                    "output.fmvAspectRatio", R.string.settings_fmv_aspect_ratio, R.string.settings_fmv_aspect_ratio_summary,
-                    options(off, res(R.string.settings_opt_aspect_auto), *aspectRatios.toTypedArray(), res(R.string.settings_opt_custom)),
-                ),
-                Choice(
-                    "output.deinterlaceMode", R.string.settings_deinterlacing,
-                    options = options(
-                        auto, off, text("Weave (top field first)"), text("Weave (bottom field first)"),
-                        text("Bob (top field first)"), text("Bob (bottom field first)"),
-                        text("Blend (top field first)"), text("Blend (bottom field first)"),
-                        text("Adaptive (top field first)"), text("Adaptive (bottom field first)"),
-                    ),
-                ),
-                Slider(
-                    "hwFixes.displayZoom", R.string.settings_display_zoom, R.string.settings_display_zoom_summary,
-                    range = 100..150, step = 5, unit = R.string.settings_unit_percent,
-                ),
-                Toggle("output.portraitRenderTop", R.string.settings_portrait_top),
-                Toggle("output.landscapeRenderTop", R.string.settings_landscape_top),
-            ),
-            advanced = true,
-        ),
-        SettingsSection(
-            R.string.settings_section_renderer_options,
-            listOf(
-                Choice(
-                    "graphics.texturePreloading", R.string.settings_texture_preloading, R.string.settings_texture_preloading_summary,
-                    options(off, res(R.string.settings_opt_partial), res(R.string.settings_opt_full)),
-                    inline = true,
-                ),
-                Choice(
-                    "graphics.hardwareDownloadMode", R.string.settings_download_mode, R.string.settings_download_mode_summary,
-                    options(
-                        res(R.string.settings_opt_accurate), res(R.string.settings_opt_force_full),
-                        res(R.string.settings_opt_no_readbacks), res(R.string.settings_opt_unsynchronized),
-                        res(R.string.settings_opt_disabled), res(R.string.settings_opt_asynchronous),
-                    ),
-                ),
-                Toggle("graphics.hwMipmap", R.string.settings_mipmapping),
-                Choice(
-                    "hwFixes.triFilter", R.string.settings_trilinear,
-                    options = listOf(
-                        Option(-1, auto), Option(0, off), Option(1, text("PS2")), Option(2, res(R.string.settings_opt_forced)),
-                    ),
-                    inline = true,
-                ),
-                Choice(
-                    "hwFixes.maxAnisotropy", R.string.settings_anisotropic, R.string.settings_anisotropic_summary,
-                    listOf(Option(0, off)) + listOf(2, 4, 8, 16).map { Option(it, text("$it×")) },
-                ),
-                Toggle("display.gsBackThreadMode", R.string.settings_gs_thread, R.string.settings_gs_thread_summary, on = 1, off = 0),
-                Choice(
-                    "hwFixes.gpuProfile", R.string.settings_gpu_profile, R.string.settings_gpu_profile_summary,
-                    options(auto, text("Mali"), text("Adreno"), text("PowerVR"), text("Xclipse")),
-                ),
-                Toggle(
-                    "output.turnipUbwcHint", R.string.settings_turnip_ubwc, R.string.settings_turnip_ubwc_summary,
-                    visibleWhen = { it.string("output.customDriverId").isNotEmpty() },
-                ),
-                Toggle("display.useAngleOpenGL", R.string.settings_angle, R.string.settings_angle_summary),
-                Toggle("display.vsyncEnable", R.string.settings_vsync),
-                Toggle("display.hwRov", R.string.settings_rov, R.string.settings_rov_summary),
-                Toggle("display.hwAccurateAlphaTest", R.string.settings_accurate_alpha_test),
-                Toggle("display.hwAa1", R.string.settings_hw_aa1),
-                Toggle("display.coalesceRenderPasses", R.string.settings_coalesce_render_passes),
-                Toggle("display.forceMaliFbFetch", R.string.settings_force_fb_fetch),
-            ),
-            advanced = true,
-        ),
-        SettingsSection(
-            R.string.settings_section_post_processing,
-            listOf(
-                Toggle("graphics.fxaa", R.string.settings_fxaa),
-                Choice(
-                    "graphics.casMode", R.string.settings_cas, R.string.settings_cas_summary,
-                    options(off, res(R.string.settings_opt_sharpen), res(R.string.settings_opt_sharpen_resize)),
-                ),
-                Slider(
-                    "graphics.casSharpness", R.string.settings_cas_sharpness, range = 0..100,
-                    unit = R.string.settings_unit_percent, enabledWhen = { it.int("graphics.casMode") != 0 },
-                ),
-                Choice(
-                    "graphics.upscaler", R.string.settings_upscaler, R.string.settings_upscaler_summary,
-                    listOf(
-                        Option(0, off), Option(2, text("FSR 1")), Option(3, text("SGSR")),
-                        Option(4, res(R.string.settings_opt_sgsr_edge)),
-                    ),
-                ),
-                Slider(
-                    "graphics.fsrSharpness", R.string.settings_upscaler_sharpness, range = 0..100,
-                    unit = R.string.settings_unit_percent, visibleWhen = { it.int("graphics.upscaler") == 2 },
-                ),
-                Slider(
-                    "graphics.sgsrSharpness", R.string.settings_upscaler_sharpness, range = 0..200, step = 5,
-                    unit = R.string.settings_unit_percent, visibleWhen = { it.int("graphics.upscaler") in 3..4 },
-                ),
-                Choice(
-                    "graphics.tvShader", R.string.settings_tv_shader,
-                    options = options(
-                        off, res(R.string.settings_opt_scanlines), res(R.string.settings_opt_diagonal),
-                        res(R.string.settings_opt_triangular), res(R.string.settings_opt_wave),
-                        text("Lottes CRT"), text("4xRGSS"), text("NxAGSS"),
-                    ),
-                ),
-                Toggle("graphics.shadeBoost", R.string.settings_shade_boost, R.string.settings_shade_boost_summary),
-                shadeBoostSlider("graphics.shadeBoostBrightness", R.string.settings_brightness),
-                shadeBoostSlider("graphics.shadeBoostContrast", R.string.settings_contrast),
-                shadeBoostSlider("graphics.shadeBoostSaturation", R.string.settings_saturation),
-                shadeBoostSlider("graphics.shadeBoostGamma", R.string.settings_gamma),
             ),
             advanced = true,
         ),
         SettingsSection(
             R.string.settings_section_overlay,
             listOf(
-                Toggle("osd.osdShowFps", R.string.settings_osd_fps),
-                Toggle("osd.osdShowSpeed", R.string.settings_osd_speed),
-                Toggle("osd.osdShowVps", R.string.settings_osd_vps),
-                Toggle("osd.osdShowResolution", R.string.settings_osd_resolution),
-                Toggle("osd.osdShowCpu", R.string.settings_osd_cpu),
-                Toggle("osd.osdShowGpu", R.string.settings_osd_gpu),
-                Toggle("osd.osdShowFrameTimes", R.string.settings_osd_frame_times),
+                Toggle("osd.showFps", R.string.settings_osd_fps),
+                Toggle("osd.showSpeed", R.string.settings_osd_speed),
+                Toggle("osd.showResolution", R.string.settings_osd_resolution),
+                Toggle("osd.showCpu", R.string.settings_osd_cpu),
+                Toggle("osd.showGpu", R.string.settings_osd_gpu),
+                Toggle("osd.showFrameTimes", R.string.settings_osd_frame_times),
+                Toggle("osd.showGpuStats", R.string.settings_osd_gpu_stats),
+                Toggle("osd.showInputs", R.string.settings_osd_inputs),
+                Toggle("osd.showEnhancements", R.string.settings_osd_enhancements),
+                Toggle("osd.showStatusIndicators", R.string.settings_osd_status_indicators),
                 Toggle("frameLimit.screenshotButton", R.string.settings_screenshot_button, R.string.settings_screenshot_button_summary),
                 Toggle("frameLimit.macroButton", R.string.settings_macro_button, R.string.settings_macro_button_summary),
-                Toggle("osd.osdShowMessages", R.string.settings_osd_messages, R.string.settings_osd_messages_summary),
-                Slider("osd.osdScale", R.string.settings_osd_scale, range = 25..200, step = 5, unit = R.string.settings_unit_percent),
-                Choice(
-                    "osd.osdPosition", R.string.settings_osd_position,
-                    options = listOf(
-                        Option(1, res(R.string.settings_opt_top_left)), Option(3, res(R.string.settings_opt_top_right)),
-                        Option(7, res(R.string.settings_opt_bottom_left)), Option(9, res(R.string.settings_opt_bottom_right)),
-                    ),
-                ),
+                Toggle("osd.showMessages", R.string.settings_osd_messages, R.string.settings_osd_messages_summary),
+                Slider("osd.scale", R.string.settings_osd_scale, range = 25..200, step = 5, unit = R.string.settings_unit_percent),
             ),
             advanced = true,
         ),
     )
+
+    private fun pgxpToggle(path: String, title: Int, summary: Int = 0) =
+        Toggle(path, title, summary, enabledWhen = { it.boolean("gpu.pgxpEnable") })
 
     private fun miscellaneous() = listOf(
         SettingsSection(
@@ -299,91 +243,53 @@ object SettingsCatalog {
         ),
     )
 
-    private fun shadeBoostSlider(path: String, title: Int) = Slider(
-        path, title, range = 1..100, enabledWhen = { it.boolean("graphics.shadeBoost") },
-    )
-
     private fun performance() = listOf(
         SettingsSection(
             R.string.settings_section_speed,
             listOf(
-                PresetSetting,
                 Slider(
                     "frameLimit.nominalSpeedPercent", R.string.settings_speed_limit, R.string.settings_speed_limit_summary,
                     range = 10..500, step = 10, unit = R.string.settings_unit_percent,
+                    enabledWhen = { it.boolean("frameLimit.frameLimitEnable") },
                 ),
+                Toggle("frameLimit.frameLimitEnable", R.string.settings_frame_limiter, R.string.settings_frame_limiter_summary),
                 Slider(
-                    "cpu.eeCycleRate", R.string.settings_ee_cycle_rate, R.string.settings_ee_cycle_rate_summary,
-                    range = -3..3,
-                    labels = listOf("50%", "60%", "75%", "100%", "130%", "180%", "300%")
-                        .mapIndexed { index, label -> index - 3 to text(label) }.toMap(),
+                    "cpu.overclockPercent", R.string.settings_overclock, R.string.settings_overclock_summary,
+                    range = 25..400, step = 25, unit = R.string.settings_unit_percent,
                 ),
-                Slider(
-                    "cpu.eeCycleSkip", R.string.settings_ee_cycle_skip, R.string.settings_ee_cycle_skip_summary,
-                    range = 0..3, labels = mapOf(0 to off),
-                ),
-                Toggle("cpu.mtvu", R.string.settings_mtvu, R.string.settings_mtvu_summary),
+                Choice("console.cdromReadSpeedup", R.string.settings_cdrom_read_speedup, R.string.settings_cdrom_read_speedup_summary, speedups),
+                Choice("console.cdromSeekSpeedup", R.string.settings_cdrom_seek_speedup, options = speedups),
             ),
         ),
         SettingsSection(
             R.string.settings_section_frame_pacing,
             listOf(
-                Toggle("hwFixes.vsyncQueueSize", R.string.settings_low_latency, R.string.settings_low_latency_summary, on = 0, off = 2),
-                Toggle("frameLimit.frameLimitEnable", R.string.settings_frame_limiter, R.string.settings_frame_limiter_summary),
-                Slider(
-                    "frameLimit.fpsLimit", R.string.settings_fps_cap, R.string.settings_fps_cap_summary,
-                    range = 0..60, step = 5, unit = R.string.settings_unit_fps, labels = mapOf(0 to off),
-                ),
-                NumberInput("output.framerateNtsc", R.string.settings_framerate_ntsc, min = 10.0, max = 120.0, decimal = true),
-                NumberInput("output.frameratePal", R.string.settings_framerate_pal, min = 10.0, max = 120.0, decimal = true),
-                Toggle("emuCore.skipDuplicateFrames", R.string.settings_skip_duplicate_frames, R.string.settings_skip_duplicate_frames_summary),
+                Toggle("display.vsync", R.string.settings_vsync),
+                Toggle("display.optimalFramePacing", R.string.settings_optimal_frame_pacing, R.string.settings_optimal_frame_pacing_summary),
+                Toggle("display.syncToHostRefreshRate", R.string.settings_sync_host_refresh, R.string.settings_sync_host_refresh_summary),
+                Toggle("display.skipDuplicateFrames", R.string.settings_skip_duplicate_frames, R.string.settings_skip_duplicate_frames_summary),
             ),
-            advanced = true,
         ),
         SettingsSection(
-            R.string.settings_section_speedhacks,
-            listOf(
-                Toggle("cpu.vu1Instant", R.string.settings_vu1_instant),
-                Toggle("cpu.vuFlagHack", R.string.settings_vu_flag_hack),
-                Toggle("cpu.intcStat", R.string.settings_intc_stat),
-                Toggle("cpu.waitLoop", R.string.settings_wait_loop),
-                Toggle("cpu.fastCDVD", R.string.settings_fast_cdvd, R.string.settings_fast_cdvd_summary),
-                Toggle("cpu.vuNeonFusions", R.string.settings_vu_neon_fusions),
-                Toggle("cpu.vuDeferredWrites", R.string.settings_vu_deferred_writes, R.string.settings_experimental_summary),
-                Toggle("cpu.vuSkipStallSim", R.string.settings_vu_skip_stall_sim, R.string.settings_experimental_summary),
-            ),
-            advanced = true,
-        ),
-        SettingsSection(
-            R.string.settings_section_cpu_accuracy,
+            R.string.settings_section_cpu,
             listOf(
                 Choice(
-                    "cpu.eeClampMode", R.string.settings_ee_clamping,
-                    options = options(off, normal, res(R.string.settings_opt_extra), res(R.string.settings_opt_full), res(R.string.settings_opt_exact)),
-                ),
-                Choice("cpu.vuClampMode", R.string.settings_vu_clamping, options = options(*vuClampModes.toTypedArray())),
-                Choice(
-                    "cpu.vu1ClampMode", R.string.settings_vu1_clamping,
-                    options = listOf(Option(-1, res(R.string.settings_opt_same_as_vu))) +
-                        vuClampModes.mapIndexed { index, label -> Option(index, label) },
-                ),
-                Choice("emuCore.eeFpuRoundMode", R.string.settings_ee_round_mode, options = roundModes),
-                Choice("emuCore.vu0RoundMode", R.string.settings_vu0_round_mode, options = roundModes),
-                Choice("emuCore.vu1RoundMode", R.string.settings_vu1_round_mode, options = roundModes),
-            ),
-            advanced = true,
-        ),
-        SettingsSection(
-            R.string.settings_section_device,
-            listOf(
-                Toggle("output.performanceHint", R.string.settings_adpf, R.string.settings_adpf_summary),
-                Choice(
-                    "output.affinityMode", R.string.settings_affinity, R.string.settings_affinity_summary,
-                    options(
-                        res(R.string.settings_opt_disabled), text("EE › VU › GS"), text("EE › GS › VU"), text("VU › EE › GS"),
-                        text("VU › GS › EE"), text("GS › EE › VU"), text("GS › VU › EE"), res(R.string.settings_opt_performance_cores),
+                    "cpu.executionMode", R.string.settings_cpu_mode, R.string.settings_cpu_mode_summary,
+                    named(
+                        "Recompiler" to res(R.string.settings_opt_recompiler),
+                        "NewRec" to res(R.string.settings_opt_new_recompiler),
+                        "CachedInterpreter" to res(R.string.settings_opt_cached_interpreter),
+                        "Interpreter" to res(R.string.settings_opt_interpreter),
                     ),
                 ),
+                Choice(
+                    "cpu.fastmemMode", R.string.settings_fastmem, R.string.settings_fastmem_summary,
+                    named("MMap" to res(R.string.settings_opt_fastmem_mmap), "LUT" to res(R.string.settings_opt_fastmem_lut), "Disabled" to off),
+                    inline = true,
+                ),
+                Toggle("cpu.recompilerICache", R.string.settings_icache, R.string.settings_icache_summary),
+                Toggle("gpu.useThread", R.string.settings_gpu_thread, R.string.settings_gpu_thread_summary),
+                Toggle("gpu.threadedPresentation", R.string.settings_threaded_presentation, R.string.settings_threaded_presentation_summary),
             ),
             advanced = true,
         ),
@@ -393,23 +299,31 @@ object SettingsCatalog {
         SettingsSection(
             R.string.settings_section_volume,
             listOf(
-                Slider("audio.audioVolume", R.string.settings_volume, range = 0..200, step = 5, unit = R.string.settings_unit_percent),
-                Toggle("audio.audioMuted", R.string.settings_mute),
+                Slider("audio.volume", R.string.settings_volume, range = 0..200, step = 5, unit = R.string.settings_unit_percent),
+                Slider("audio.fastForwardVolume", R.string.settings_ff_volume, range = 0..200, step = 5, unit = R.string.settings_unit_percent),
+                Toggle("audio.muted", R.string.settings_mute),
+                Toggle("audio.muteCdAudio", R.string.settings_mute_cd_audio, R.string.settings_mute_cd_audio_summary),
             ),
         ),
         SettingsSection(
             R.string.settings_section_audio_output,
             listOf(
-                Toggle("audio.audioTimeStretch", R.string.settings_time_stretch, R.string.settings_time_stretch_summary),
-                Slider("audio.audioBufferMs", R.string.settings_audio_buffer, range = 20..200, step = 5, unit = R.string.settings_unit_ms),
-                Slider(
-                    "audio.audioOutputLatencyMs", R.string.settings_output_latency, R.string.settings_output_latency_summary,
-                    range = 5..100, step = 5, unit = R.string.settings_unit_ms,
+                Choice(
+                    "audio.stretchMode", R.string.settings_audio_stretch, R.string.settings_audio_stretch_summary,
+                    named(
+                        "TimeStretch" to res(R.string.settings_opt_time_stretch),
+                        "Resample" to res(R.string.settings_opt_resample),
+                        "Off" to off,
+                    ),
+                    inline = true,
                 ),
-                Toggle("audio.audioSwapChannels", R.string.settings_swap_channels),
-                Toggle("audio.spu2LightweightMix", R.string.settings_lightweight_audio, R.string.settings_lightweight_audio_summary),
-                Toggle("audio.spu2NeonReverb", R.string.settings_neon_reverb, R.string.settings_experimental_summary),
-                Toggle("audio.audioOpenSLES", R.string.settings_opensles, R.string.settings_opensles_summary),
+                Slider("audio.bufferMs", R.string.settings_audio_buffer, range = 20..300, step = 10, unit = R.string.settings_unit_ms),
+                Slider(
+                    "audio.outputLatencyMs", R.string.settings_output_latency, R.string.settings_output_latency_summary,
+                    range = 5..100, step = 5, unit = R.string.settings_unit_ms,
+                    enabledWhen = { !it.boolean("audio.outputLatencyMinimal") },
+                ),
+                Toggle("audio.outputLatencyMinimal", R.string.settings_output_latency_minimal, R.string.settings_output_latency_minimal_summary),
             ),
             advanced = true,
         ),
@@ -435,6 +349,27 @@ object SettingsCatalog {
     )
 
     private fun controls() = listOf(
+        SettingsSection(
+            R.string.settings_section_pad,
+            listOf(
+                Choice(
+                    "controls.padType", R.string.settings_pad_type, R.string.settings_pad_type_summary,
+                    listOf(
+                        Option("AnalogController", text("DualShock")),
+                        Option("DigitalController", res(R.string.settings_opt_digital_pad)),
+                    ),
+                    inline = true,
+                ),
+                Toggle(
+                    "controls.forceAnalogOnReset", R.string.settings_force_analog, R.string.settings_force_analog_summary,
+                    enabledWhen = { it.string("controls.padType") == "AnalogController" },
+                ),
+                Toggle(
+                    "controls.analogDpadInDigitalMode", R.string.settings_analog_dpad, R.string.settings_analog_dpad_summary,
+                    enabledWhen = { it.string("controls.padType") == "AnalogController" },
+                ),
+            ),
+        ),
         SettingsSection(
             R.string.settings_section_virtual_pad,
             listOf(
@@ -484,12 +419,25 @@ object SettingsCatalog {
         ),
     )
 
+    private val memoryCardTypes = named(
+        "PerGameTitle" to res(R.string.settings_opt_card_per_game),
+        "Shared" to res(R.string.settings_opt_card_shared),
+        "None" to res(R.string.settings_opt_card_none),
+    )
+
     private fun system() = listOf(
         SettingsSection(
             R.string.settings_section_boot,
             listOf(
-                Toggle("emuCore.enableFastBoot", R.string.settings_fast_boot, R.string.settings_fast_boot_summary),
-                Toggle("output.autoProgressiveScan", R.string.settings_auto_progressive, R.string.settings_auto_progressive_summary),
+                Toggle("console.fastBoot", R.string.settings_fast_boot, R.string.settings_fast_boot_summary),
+                Choice(
+                    "console.region", R.string.settings_region, R.string.settings_region_summary,
+                    named(
+                        "Auto" to auto, "NTSC-J" to res(R.string.settings_opt_region_japan),
+                        "NTSC-U" to res(R.string.settings_opt_region_usa), "PAL" to res(R.string.settings_opt_region_europe),
+                    ),
+                    inline = true,
+                ),
                 BiosManageSetting,
                 GameBiosSetting,
             ),
@@ -497,189 +445,42 @@ object SettingsCatalog {
         SettingsSection(
             R.string.settings_section_memory_cards,
             listOf(
-                Toggle("system.memoryCardSlot1Enabled", R.string.settings_mc_slot1_enabled),
-                MemoryCardSlotSetting("system.memoryCardSlot1Filename", R.string.settings_mc_slot1) { it.boolean("system.memoryCardSlot1Enabled") },
-                Toggle("system.memoryCardSlot2Enabled", R.string.settings_mc_slot2_enabled),
-                MemoryCardSlotSetting("system.memoryCardSlot2Filename", R.string.settings_mc_slot2) { it.boolean("system.memoryCardSlot2Enabled") },
+                Choice("system.memoryCard1Type", R.string.settings_mc_slot1_type, R.string.settings_mc_type_summary, memoryCardTypes, inline = true),
+                MemoryCardSlotSetting("system.memoryCard1File", R.string.settings_mc_slot1) { it.string("system.memoryCard1Type") == "Shared" },
+                Choice("system.memoryCard2Type", R.string.settings_mc_slot2_type, options = memoryCardTypes, inline = true),
+                MemoryCardSlotSetting("system.memoryCard2File", R.string.settings_mc_slot2) { it.string("system.memoryCard2Type") == "Shared" },
                 MemoryCardsManageSetting,
-            ),
-        ),
-        SettingsSection(
-            R.string.settings_section_rewind,
-            listOf(
-                Toggle("rewind.enabled", R.string.settings_rewind, R.string.settings_rewind_summary),
-                Slider(
-                    "rewind.intervalMinutes", R.string.settings_rewind_interval,
-                    range = 1..10, unit = R.string.settings_unit_minutes,
-                    enabledWhen = { it.boolean("rewind.enabled") },
-                ),
-                Slider(
-                    "rewind.keep", R.string.settings_rewind_keep,
-                    range = 1..5, enabledWhen = { it.boolean("rewind.enabled") },
-                ),
-            ),
-        ),
-        SettingsSection(
-            R.string.settings_section_patches,
-            listOf(
-                Toggle("emuCore.enablePatches", R.string.settings_compat_patches, R.string.settings_compat_patches_summary),
-                Toggle("emuCore.enableNoInterlacingPatches", R.string.settings_no_interlacing_patches, R.string.settings_no_interlacing_patches_summary),
             ),
         ),
     )
 
     private fun advanced() = listOf(
         SettingsSection(
-            R.string.settings_section_game_fixes,
+            R.string.settings_section_console,
             listOf(
-                Toggle("emuCore.enableGameFixes", R.string.settings_gamedb_fixes, R.string.settings_gamedb_fixes_summary),
-                Toggle("emuCore.gamefixSkipMpeg", R.string.settings_fix_skip_mpeg),
-                Toggle("emuCore.gamefixSoftwareRendererFmv", R.string.settings_fix_software_fmv),
-                Toggle("emuCore.gamefixEETiming", R.string.settings_fix_ee_timing),
-                Toggle("emuCore.gamefixInstantDma", R.string.settings_fix_instant_dma),
-                Toggle("emuCore.gamefixBlitInternalFps", R.string.settings_fix_blit_fps),
-                Toggle("emuCore.gamefixOphFlag", R.string.settings_fix_oph_flag),
-                Toggle("emuCore.gamefixGifFifo", R.string.settings_fix_gif_fifo),
-                Toggle("emuCore.gamefixDmaBusy", R.string.settings_fix_dma_busy),
-                Toggle("emuCore.gamefixVif1Stall", R.string.settings_fix_vif1_stall),
-                Toggle("emuCore.gamefixIbit", R.string.settings_fix_ibit),
-                Toggle("emuCore.gamefixFullVu0Sync", R.string.settings_fix_full_vu0_sync),
-                Toggle("emuCore.gamefixVuAddSub", R.string.settings_fix_vu_add_sub),
-                Toggle("emuCore.gamefixVuOverflow", R.string.settings_fix_vu_overflow),
-                Toggle("emuCore.gamefixXgkick", R.string.settings_fix_xgkick),
-                Toggle("emuCore.gamefixGoemonTlb", R.string.settings_fix_goemon_tlb),
-                Toggle("emuCore.gamefixVuSync", R.string.settings_fix_vu_sync),
+                Toggle("console.enable8MbRam", R.string.settings_8mb_ram, R.string.settings_8mb_ram_summary),
+                Toggle("console.loadImageToRam", R.string.settings_load_to_ram, R.string.settings_load_to_ram_summary),
             ),
         ),
         SettingsSection(
-            R.string.settings_section_display_fixes,
+            R.string.settings_section_gpu_accuracy,
             listOf(
-                Toggle("display.antiBlur", R.string.settings_anti_blur),
-                Toggle("display.screenOffsets", R.string.settings_screen_offsets),
-                Toggle("display.showOverscan", R.string.settings_show_overscan),
-                Toggle("display.disableInterlaceOffset", R.string.settings_disable_interlace_offset),
-                Toggle("display.syncToHostRefresh", R.string.settings_sync_host_refresh),
-                Toggle("hwFixes.integerScaling", R.string.settings_integer_scaling),
+                Toggle("gpu.accurateBlending", R.string.settings_accurate_blending, R.string.settings_accurate_blending_summary),
+                Toggle("gpu.disableInterlacing", R.string.settings_disable_interlacing, R.string.settings_disable_interlacing_summary),
+                Toggle("gpu.forceNtscTimings", R.string.settings_force_ntsc, R.string.settings_force_ntsc_summary),
                 Choice(
-                    "hwFixes.dithering", R.string.settings_dithering,
-                    options = options(off, res(R.string.settings_opt_scaled), res(R.string.settings_opt_unscaled), res(R.string.settings_opt_force_32bit)),
-                ),
-                Choice(
-                    "display.overrideTextureBarriers", R.string.settings_texture_barriers,
-                    options = listOf(Option(-1, auto), Option(0, off), Option(1, on)),
-                    inline = true,
-                ),
-                Toggle("display.disableFramebufferFetch", R.string.settings_disable_fb_fetch),
-                Toggle("display.disableVertexShaderExpand", R.string.settings_disable_vs_expand),
-                Toggle("display.useBlitSwapChain", R.string.settings_blit_swap_chain),
-                Toggle("display.disableShaderCache", R.string.settings_disable_shader_cache),
-            ),
-        ),
-        SettingsSection(
-            R.string.settings_section_crop,
-            listOf("cropTop" to R.string.settings_crop_top, "cropBottom" to R.string.settings_crop_bottom,
-                "cropLeft" to R.string.settings_crop_left, "cropRight" to R.string.settings_crop_right).map { (field, title) ->
-                NumberInput(
-                    "hwFixes.$field", title, R.string.settings_crop_summary, min = 0.0, max = 200.0,
-                    enabledWhen = { it.int("hwFixes.displayZoom") <= 100 },
-                )
-            },
-        ),
-        SettingsSection(
-            R.string.settings_section_upscaling_fixes,
-            listOf(
-                Choice(
-                    "hwFixes.halfPixelOffset", R.string.settings_half_pixel_offset, R.string.settings_half_pixel_offset_summary,
-                    options(
-                        off, normal, res(R.string.settings_opt_special), res(R.string.settings_opt_special_aggressive),
-                        res(R.string.settings_opt_native), res(R.string.settings_opt_native_texture_offset),
+                    "gpu.lineDetectMode", R.string.settings_line_detect, R.string.settings_line_detect_summary,
+                    named(
+                        "Disabled" to off, "Quads" to res(R.string.settings_opt_line_quads),
+                        "BasicTriangles" to res(R.string.settings_opt_line_basic_triangles),
+                        "AggressiveTriangles" to res(R.string.settings_opt_line_aggressive_triangles),
                     ),
                 ),
                 Choice(
-                    "hwFixes.nativeScaling", R.string.settings_native_scaling,
-                    options = options(off, normal, aggressive, res(R.string.settings_opt_normal_plus), res(R.string.settings_opt_aggressive_plus)),
-                ),
-                Choice(
-                    "hwFixes.roundSprite", R.string.settings_round_sprite,
-                    options = options(off, res(R.string.settings_opt_half), res(R.string.settings_opt_full)),
+                    "gpu.downsampleMode", R.string.settings_downsample, R.string.settings_downsample_summary,
+                    named("Disabled" to off, "Box" to res(R.string.settings_opt_downsample_box), "Adaptive" to res(R.string.settings_opt_downsample_adaptive)),
                     inline = true,
                 ),
-                Choice(
-                    "hwFixes.bilinearUpscale", R.string.settings_bilinear_upscale,
-                    options = options(off, normal, res(R.string.settings_opt_half), res(R.string.settings_opt_forced)),
-                    inline = true,
-                ),
-                Toggle("hwFixes.alignSprite", R.string.settings_align_sprite),
-                Toggle("hwFixes.mergeSprite", R.string.settings_merge_sprite),
-                Toggle("hwFixes.forceEvenSpritePosition", R.string.settings_even_sprite_position),
-                Toggle("hwFixes.unscaledPaletteDraw", R.string.settings_unscaled_palette_draw),
-                NumberInput("hwFixes.textureOffsetX", R.string.settings_texture_offset_x, min = 0.0, max = 10000.0),
-                NumberInput("hwFixes.textureOffsetY", R.string.settings_texture_offset_y, min = 0.0, max = 10000.0),
-            ),
-        ),
-        SettingsSection(
-            R.string.settings_section_hardware_fixes,
-            listOf(
-                Choice(
-                    "hwFixes.autoFlush", R.string.settings_auto_flush,
-                    options = options(off, res(R.string.settings_opt_sprites), on),
-                    inline = true,
-                ),
-                Choice(
-                    "hwFixes.textureInsideRt", R.string.settings_texture_inside_rt,
-                    options = options(off, res(R.string.settings_opt_inside), res(R.string.settings_opt_merge)),
-                    inline = true,
-                ),
-                Choice(
-                    "hwFixes.gpuTargetClut", R.string.settings_gpu_target_clut,
-                    options = options(off, res(R.string.settings_opt_inside), res(R.string.settings_opt_forced)),
-                    inline = true,
-                ),
-                Choice(
-                    "hwFixes.cpuSpriteRenderBw", R.string.settings_cpu_sprite_bw,
-                    options = options(off, text("64"), text("128"), text("256")),
-                    inline = true,
-                ),
-                Choice(
-                    "hwFixes.cpuSpriteRenderLevel", R.string.settings_cpu_sprite_level,
-                    options = options(
-                        off, res(R.string.settings_opt_sprites), res(R.string.settings_opt_triangles), aggressive,
-                        res(R.string.settings_opt_full), res(R.string.settings_opt_maximum),
-                    ),
-                ),
-                Choice(
-                    "hwFixes.cpuClutRender", R.string.settings_cpu_clut_render,
-                    options = options(off, normal, aggressive),
-                    inline = true,
-                ),
-                Choice(
-                    "hwFixes.limit24BitDepth", R.string.settings_limit_24bit_depth,
-                    options = options(off, res(R.string.settings_opt_upper), res(R.string.settings_opt_lower)),
-                    inline = true,
-                ),
-                NumberInput("hwFixes.skipDrawStart", R.string.settings_skip_draw_start, min = 0.0, max = 10000.0),
-                NumberInput("hwFixes.skipDrawEnd", R.string.settings_skip_draw_end, min = 0.0, max = 10000.0),
-                Toggle("hwFixes.gpuPaletteConversion", R.string.settings_gpu_palette_conversion),
-                Toggle("hwFixes.cpuFramebufferConversion", R.string.settings_cpu_fb_conversion),
-                Toggle("hwFixes.readTargetsWhenClosing", R.string.settings_read_targets_closing),
-                Toggle("hwFixes.preloadFrameData", R.string.settings_preload_frame_data),
-                Toggle("hwFixes.estimateTextureRegion", R.string.settings_estimate_texture_region),
-                Toggle("hwFixes.drawBuffering", R.string.settings_draw_buffering),
-                Toggle("hwFixes.disableDepthEmulation", R.string.settings_disable_depth_emulation),
-                Toggle("hwFixes.disablePartialInvalidation", R.string.settings_disable_partial_invalidation),
-                Toggle("hwFixes.disableSafeFeatures", R.string.settings_disable_safe_features),
-                Toggle("hwFixes.disableRenderFixes", R.string.settings_disable_render_fixes),
-                Toggle("hwFixes.spinGpuReadbacks", R.string.settings_spin_gpu),
-                Toggle("hwFixes.spinCpuReadbacks", R.string.settings_spin_cpu),
-            ),
-        ),
-        SettingsSection(
-            R.string.settings_section_software_renderer,
-            listOf(
-                Toggle("output.autoFlushSw", R.string.settings_sw_auto_flush),
-                Toggle("output.mipmapSw", R.string.settings_sw_mipmapping),
-                Slider("output.swThreads", R.string.settings_sw_threads, range = 0..10),
-                Slider("output.swThreadsHeight", R.string.settings_sw_tile_height, range = 0..8),
             ),
         ),
     )

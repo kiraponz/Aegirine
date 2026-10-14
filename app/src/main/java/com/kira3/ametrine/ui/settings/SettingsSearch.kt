@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kira3.ametrine.R
-import com.kira3.ametrine.emucore.settings.PerformancePreset
 import java.util.Locale
 
 /** Settings whose title, summary, section or category contain every word of the query. */
@@ -102,7 +101,6 @@ fun SettingsSearchScreen(
     val actions = remember(viewModel, onOpenGpuDriver, onOpenBios, onOpenMemoryCards) {
         object : SettingsActions {
             override fun set(path: String, value: Any) = viewModel.set(path, value)
-            override fun applyPreset(preset: PerformancePreset) = viewModel.applyPreset(preset)
             override fun reset(path: String) = viewModel.reset(listOf(path))
             override fun openGpuDriver() = onOpenGpuDriver()
             override fun openBios() = onOpenBios()

@@ -1,30 +1,18 @@
 package com.kira3.ametrine.emucore
 
-/** What the core reads out of a BIOS image. */
+/** What the core knows about a PS1 BIOS image. */
 data class BiosMetadata(
-    val versionMajor: Int,
-    val versionMinor: Int,
     val region: BiosRegion,
+    /** The core's name for the image, e.g. "SCPH-7000, 7500, 9000 (v4.0 08-18-97 J)", or "Unknown BIOS". */
     val description: String,
-    val zone: String,
-) {
-    /** "v2.30" form. */
-    val versionString: String get() = "v%d.%02d".format(versionMajor, versionMinor)
-}
+)
 
-/** ROMVER region codes, as BiosTools.cpp reports them. */
-enum class BiosRegion(internal val code: Int) {
-    Japan(0),
-    Usa(1),
-    Europe(2),
-    Asia(4),
-    China(6),
-    T10k(8),
-    Test(9),
-    Free(10),
-    Unknown(-1);
+/** The console region a BIOS is for (the core's ConsoleRegion). */
+enum class BiosRegion {
+    Japan,
+    Usa,
+    Europe,
 
-    internal companion object {
-        fun fromCode(code: Int): BiosRegion = entries.firstOrNull { it.code == code } ?: Unknown
-    }
+    /** An image the core's list does not know. It can still boot. */
+    Unknown,
 }

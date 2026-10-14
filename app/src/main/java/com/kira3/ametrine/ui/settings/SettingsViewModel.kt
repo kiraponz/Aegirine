@@ -16,7 +16,6 @@ import com.kira3.ametrine.data.MemoryCard
 import com.kira3.ametrine.data.MemoryCardRepository
 import com.kira3.ametrine.data.SettingsRepository
 import com.kira3.ametrine.emucore.settings.EmulatorSettings
-import com.kira3.ametrine.emucore.settings.PerformancePreset
 import com.kira3.ametrine.emucore.settings.SettingsValues
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,8 +84,6 @@ class SettingsViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun set(path: String, value: Any) = edit { SettingsValues(it).with(path, value) }
-
-    fun applyPreset(preset: PerformancePreset) = edit { preset.applyTo(it) }
 
     /** Makes the values at [paths] follow the global settings again. Only for a game. */
     fun reset(paths: Collection<String>) {

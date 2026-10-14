@@ -193,10 +193,13 @@ fun MemoryCardsScreen(
     }
 
     if (creating) {
-        CreateDialog(
-            onCreate = { name, folder, sizeMb ->
+        NameDialog(
+            title = stringResource(R.string.memcards_create),
+            initial = "",
+            confirm = stringResource(R.string.memcards_create),
+            onConfirm = { name ->
                 creating = false
-                viewModel.create(name, folder, sizeMb)
+                viewModel.create(name)
             },
             onDismiss = { creating = false },
         )
@@ -275,67 +278,9 @@ private fun CardMenu(enabled: Boolean, onExport: () -> Unit, onRename: () -> Uni
     }
 }
 
-/** The kind and capacity (a folder card: how much it holds), then when it was last written. */
+/** When the card was last written. */
 @Composable
-private fun MemoryCard.details(): String {
-    val context = LocalContext.current
-    val kind = when {
-        isFolder -> stringResource(R.string.memcards_kind_folder)
-        sizeMb != null -> stringResource(R.string.memcards_kind_mb, sizeMb)
-        else -> stringResource(R.string.memcards_kind_other)
-    }
-    val date = DateFormat.getMediumDateFormat(context).format(Date(modified))
-    return if (isFolder) {
-        "$kind · ${Formatter.formatShortFileSize(context, bytes)} · $date"
-    } else {
-        "$kind · $date"
-    }
-}
-
-@Composable
-private fun CreateDialog(onCreate: (String, Boolean, Int) -> Unit, onDismiss: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    // 0 = folder, else MB.
-    var size by remember { mutableIntStateOf(8) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.memcards_create)) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.memcards_name)) },
-                    singleLine = true,
-                )
-                for (option in listOf(8, 16, 32, 64, 0)) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { size = option },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = size == option, onClick = { size = option })
-                        Text(
-                            if (option == 0) stringResource(R.string.memcards_kind_folder)
-                            else stringResource(R.string.memcards_kind_mb, option),
-                        )
-                    }
-                }
-                Text(
-                    stringResource(R.string.memcards_create_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = name.isNotBlank(), onClick = { onCreate(name, size == 0, size) }) {
-                Text(stringResource(R.string.memcards_create))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
-    )
-}
+private fun MemoryCard.details(): String = DateFormat.getMediumDateFormat(LocalContext.current).format(Date(modified))
 
 @Composable
 private fun NameDialog(title: String, initial: String, confirm: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {

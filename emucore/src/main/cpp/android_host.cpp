@@ -43,6 +43,7 @@ static void OnPadVibration(u32 pad_index, float large_motor, float small_motor);
 static void SendPadVibration(u32 pad_index, u8 large_motor, u8 small_motor);
 static void StopPadVibration();
 static void RestorePadVibration();
+static void ApplyDisplayLayout();
 static std::string GetResourcePath(std::string_view filename, bool allow_override);
 
 static JavaVM* s_java_vm = nullptr;
@@ -90,6 +91,10 @@ static ANativeWindow* s_window = nullptr;
 static u32 s_window_width = 0;
 static u32 s_window_height = 0;
 static float s_refresh_rate = 0.0f;
+
+// Where the picture sits (SetDisplayLayout). Guarded by s_window_mutex.
+static bool s_portrait_top = true;
+static u32 s_top_margin = 0;
 
 // How long a boot waits for the activity's surface before it starts without one.
 static constexpr auto WINDOW_WAIT_TIMEOUT = std::chrono::seconds(2);
@@ -259,13 +264,21 @@ void AndroidHost::SetWindow(ANativeWindow* window, u32 width, u32 height)
   {
     // The same surface at a new size. We already hold a reference to it.
     ANativeWindow_release(window);
-    Host::RunOnCPUThread([width, height]() { Host::ResizeDisplayWindow(width, height, 1.0f); });
+    Host::RunOnCPUThread([width, height]() {
+      Host::ResizeDisplayWindow(width, height, 1.0f);
+      ApplyDisplayLayout();
+    });
     return;
   }
 
   // The device may still be rendering to the old window, so it only goes once the device has
   // moved to the new one (or to none).
-  Host::RunOnCPUThread([]() { Host::UpdateDisplayWindow(); }, true);
+  Host::RunOnCPUThread(
+    []() {
+      Host::UpdateDisplayWindow();
+      ApplyDisplayLayout();
+    },
+    true);
   if (old)
     ANativeWindow_release(old);
 }
@@ -274,6 +287,26 @@ void AndroidHost::SetDisplayRefreshRate(float hz)
 {
   std::unique_lock lock(s_window_mutex);
   s_refresh_rate = hz;
+}
+
+void AndroidHost::SetDisplayLayout(bool portrait_top, u32 top_margin)
+{
+  {
+    std::unique_lock lock(s_window_mutex);
+    s_portrait_top = portrait_top;
+    s_top_margin = top_margin;
+  }
+  Host::RunOnCPUThread([]() { ApplyDisplayLayout(); });
+}
+
+void AndroidHost::ApplyDisplayLayout()
+{
+  // The core aligns along the axis with room to spare, which is the vertical one on a portrait
+  // surface; on a landscape one "top" would mean "left", so the picture stays in the middle.
+  std::unique_lock lock(s_window_mutex);
+  const bool top = s_portrait_top && s_window_height > s_window_width;
+  g_settings.display_alignment = top ? DisplayAlignment::LeftOrTop : DisplayAlignment::Center;
+  g_settings.display_top_margin = static_cast<u16>(top ? std::min<u32>(s_top_margin, 0xFFFF) : 0);
 }
 
 void AndroidHost::SetPadBind(u32 port, u32 index, float value)
@@ -484,6 +517,8 @@ void Host::ReportErrorAsync(std::string_view title, std::string_view message)
 
 void Host::LoadSettings(SettingsInterface& si, std::unique_lock<std::mutex>& lock)
 {
+  // Settings the frontend works out itself, over what the core just loaded.
+  AndroidHost::ApplyDisplayLayout();
 }
 
 void Host::CheckForSettingsChanges(const Settings& old_settings)

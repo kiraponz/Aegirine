@@ -139,10 +139,7 @@ data object GeminiModelSetting : Setting(
     enabledWhen = { it.boolean("gemini.enabled") },
 )
 
-/** The performance presets, which rewrite several settings at once. */
-data object PresetSetting : Setting(null, R.string.settings_preset, R.string.settings_preset_summary, null, null)
-
-/** The BIOS a game boots with; the options are the installed BIOS files. */
+/** The BIOS a game boots with, for every region; the options are the installed BIOS files. */
 data object GameBiosSetting : Setting(
     "system.biosFilename", R.string.settings_game_bios, R.string.settings_game_bios_summary, null, null, gameOnly = true,
 )
@@ -150,7 +147,7 @@ data object GameBiosSetting : Setting(
 /** The custom Vulkan driver, picked on its own screen where packs are also installed. */
 data object GpuDriverSetting : Setting(
     "output.customDriverId", R.string.settings_gpu_driver, R.string.settings_gpu_driver_summary, null,
-    enabledWhen = { it.string("output.renderer") in setOf("auto", "vulkan") },
+    enabledWhen = { it.string("gpu.renderer") in setOf("auto", "vulkan") },
 )
 
 /** The BIOS files the app holds, managed on their own screen. */
@@ -163,7 +160,7 @@ data object ControllersSetting : Setting(
     null, R.string.settings_controllers, 0, null, null, globalOnly = true,
 )
 
-/** The key of a physical controller that presses one PS2 button, learned by pressing it in a dialog. */
+/** The key of a physical controller that presses one pad button, learned by pressing it in a dialog. */
 class KeyAssignSetting(
     path: String,
     @StringRes title: Int,

@@ -33,9 +33,9 @@ class OutputScaleTest {
 
     @Test
     fun hwScalerDownscalesShortSide() {
-        // 1080p landscape, 1x PS2 -> short side pinned toward 448 (truncated like ARMSX2).
-        assertEquals(796 to 447, outputBufferSize(1920, 1080, 1, "auto"))
-        // 3x PS2 on a small view is larger than the screen: no downscale.
+        // 1080p landscape, 480p -> short side pinned to 480.
+        assertEquals(853 to 480, outputBufferSize(1920, 1080, 1, "auto"))
+        // 1440p on a small view is larger than the screen: no downscale.
         assertNull(outputBufferSize(800, 600, 3, "auto"))
     }
 

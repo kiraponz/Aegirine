@@ -49,8 +49,8 @@ class MemoryCardsViewModel(private val repository: MemoryCardRepository) : ViewM
     ) { cards, busy, message -> MemoryCardsUiState(cards, busy, message) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MemoryCardsUiState())
 
-    fun create(name: String, folder: Boolean, sizeMb: Int) =
-        run(MemoryCardMessage.Created) { repository.create(name, folder, sizeMb) }
+    fun create(name: String) =
+        run(MemoryCardMessage.Created) { repository.create(name) }
 
     fun import(uri: Uri) = run(MemoryCardMessage.Imported) { repository.import(uri) }
 

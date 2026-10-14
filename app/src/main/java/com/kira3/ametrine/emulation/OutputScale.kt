@@ -40,9 +40,9 @@ internal fun outputBufferSize(
         }
     }
 
-    // hwScaler downscales the short side to 448 * multiplier for weak GPUs.
+    // hwScaler downscales the short side to 480 (twice the PS1's 240 lines) * multiplier for weak GPUs.
     val shortSide = minOf(baseW, baseH)
-    val targetShortSide = if (hwScaler > 0) 448 * hwScaler else shortSide
+    val targetShortSide = if (hwScaler > 0) 480 * hwScaler else shortSide
     val scale = if (targetShortSide in 1 until shortSide) targetShortSide.toFloat() / shortSide else 1f
 
     if (override == null && scale == 1f) return null

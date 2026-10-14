@@ -23,7 +23,6 @@ import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
@@ -128,14 +127,10 @@ fun BiosScreen(
                 }
             }
             itemsIndexed(installed, key = { _, bios -> bios.fileName }) { index, bios ->
-                val selected = bios.fileName == state.selected
                 SegmentedListItem(
-                    selected = selected,
-                    onClick = { viewModel.select(bios) },
                     shapes = segmentedShapes(index, installed.size),
                     colors = settingsListColors(),
                     modifier = Modifier.animateItem(),
-                    leadingContent = { RadioButton(selected = selected, onClick = null) },
                     trailingContent = {
                         IconButton(onClick = { deleting = bios }) {
                             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.bios_delete))
@@ -176,19 +171,14 @@ fun BiosScreen(
     }
 }
 
-/** E.g. "v2.30 · Japan". (The BIOS's own description repeats both.) */
+/** E.g. "Japan · SCPH-7000, 7500, 9000 (v4.0 08-18-97 J)". */
 @Composable
-private fun Bios.details(): String = "${metadata.versionString} · ${stringResource(metadata.region.labelRes)}"
+private fun Bios.details(): String = "${stringResource(metadata.region.labelRes)} · ${metadata.description}"
 
 private val BiosRegion.labelRes: Int
     get() = when (this) {
         BiosRegion.Japan -> R.string.bios_region_japan
         BiosRegion.Usa -> R.string.bios_region_usa
         BiosRegion.Europe -> R.string.bios_region_europe
-        BiosRegion.Asia -> R.string.bios_region_asia
-        BiosRegion.China -> R.string.bios_region_china
-        BiosRegion.T10k -> R.string.bios_region_t10k
-        BiosRegion.Test -> R.string.bios_region_test
-        BiosRegion.Free -> R.string.bios_region_free
         BiosRegion.Unknown -> R.string.bios_region_unknown
     }

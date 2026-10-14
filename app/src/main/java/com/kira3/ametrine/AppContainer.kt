@@ -28,7 +28,7 @@ class AppContainer(context: Context) {
 
     val emulatorCore: EmulatorCore by lazy { EmulatorCore(appContext) }
     val appPreferences: AppPreferences by lazy { AppPreferences(appContext) }
-    val biosRepository: BiosRepository by lazy { BiosRepository(appContext, emulatorCore, appPreferences) }
+    val biosRepository: BiosRepository by lazy { BiosRepository(appContext, emulatorCore) }
     private val libraryDatabase: LibraryDatabase by lazy { LibraryDatabase.create(appContext) }
     val libraryRepository: LibraryRepository by lazy {
         LibraryRepository(appContext, emulatorCore, appPreferences, libraryDatabase.gameDao(), gameRecordRepository)

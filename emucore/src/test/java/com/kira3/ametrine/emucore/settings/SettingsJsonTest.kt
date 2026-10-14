@@ -8,8 +8,8 @@ class SettingsJsonTest {
     @Test
     fun roundTrips() {
         val settings = EmulatorSettings(
-            cpu = CpuSettings(eeCycleRate = 2, mtvu = false),
-            output = OutputSettings(renderer = "vulkan", upscaleFloat = 2.5f),
+            cpu = CpuSettings(overclockPercent = 200, recompilerICache = true),
+            gpu = GpuSettings(renderer = "vulkan", resolutionScale = 3),
         )
         assertEquals(settings, SettingsJson.decode(SettingsJson.parse(SettingsJson.format(SettingsJson.encode(settings)))))
     }
@@ -17,13 +17,13 @@ class SettingsJsonTest {
     @Test
     fun badValuesFallBackToDefaults() {
         val stored = SettingsJson.parse(
-            """{"cpu": {"eeCycleRate": 1.5, "mtvu": "no", "eeCycleSkip": 2}, "output": {"upscaleFloat": 3}, "gone": {"x": 1}}""",
+            """{"gpu": {"resolutionScale": 1.5, "pgxpEnable": "no", "multisamples": 4}, "cpu": {"executionMode": 3}, "gone": {"x": 1}}""",
         )
         val settings = SettingsJson.decode(stored)
-        assertEquals(0, settings.cpu.eeCycleRate)
-        assertEquals(true, settings.cpu.mtvu)
-        assertEquals(2, settings.cpu.eeCycleSkip)
-        assertEquals(3f, settings.output.upscaleFloat)
+        assertEquals(1, settings.gpu.resolutionScale)
+        assertEquals(false, settings.gpu.pgxpEnable)
+        assertEquals(4, settings.gpu.multisamples)
+        assertEquals("Recompiler", settings.cpu.executionMode)
     }
 
     @Test
@@ -34,51 +34,63 @@ class SettingsJsonTest {
     @Test
     fun overridesRecordEveryEditedValue() {
         val global = EmulatorSettings()
-        val edited = global.copy(graphics = global.graphics.copy(fxaa = true))
+        val edited = global.copy(gpu = global.gpu.copy(pgxpEnable = true))
         val overrides = SettingsOverrides().record(global, edited)
-        assertEquals(setOf("graphics.fxaa"), overrides.paths)
+        assertEquals(setOf("gpu.pgxpEnable"), overrides.paths)
         assertEquals(edited, SettingsJson.merge(global, overrides))
 
         // An override equal to the global value stays: the player chose it for this game.
         val back = overrides.record(edited, global)
-        assertEquals(setOf("graphics.fxaa"), back.paths)
+        assertEquals(setOf("gpu.pgxpEnable"), back.paths)
 
         // A later global change reaches only the values the game does not override.
-        val newGlobal = global.copy(graphics = global.graphics.copy(fxaa = true, casMode = 1))
+        val newGlobal = global.copy(gpu = global.gpu.copy(pgxpEnable = true, resolutionScale = 4))
         val merged = SettingsJson.merge(newGlobal, back)
-        assertEquals(false, merged.graphics.fxaa)
-        assertEquals(1, merged.graphics.casMode)
+        assertEquals(false, merged.gpu.pgxpEnable)
+        assertEquals(4, merged.gpu.resolutionScale)
 
-        assertTrue(back.without(listOf("graphics.fxaa")).isEmpty())
+        assertTrue(back.without(listOf("gpu.pgxpEnable")).isEmpty())
     }
 
     @Test
     fun keysCarryTheirFields() {
         val keys = CoreKeys.of(EmulatorSettings()).associateBy { it.id }
-        assertEquals(setOf("output.renderer"), keys.getValue("EmuCore/GS/Renderer").fields)
-        assertEquals("-1", keys.getValue("EmuCore/GS/Renderer").value)
-        assertEquals(setOf("cpu.vuClampMode", "cpu.vu1ClampMode"), keys.getValue("EmuCore/CPU/Recompiler/vu1Overflow").fields)
-        assertEquals("Auto 4:3/3:2", keys.getValue("EmuCore/GS/AspectRatio").value)
-        assertEquals("false", keys.getValue("EmuCore/GS/UserHacks").value)
-        // No key is written twice.
+        assertEquals(setOf("gpu.renderer"), keys.getValue("GPU/Renderer").fields)
+        assertEquals("Automatic", keys.getValue("GPU/Renderer").value)
+        assertEquals("Auto (Game Native)", keys.getValue("Display/AspectRatio").value)
+        assertEquals("1.0", keys.getValue("Main/EmulationSpeed").value)
+        assertEquals("PerGameTitle", keys.getValue("MemoryCards/Card1Type").value)
+        // No key is written twice, and none clashes with a pinned one.
         assertEquals(keys.size, CoreKeys.of(EmulatorSettings()).size)
+        assertTrue(CoreKeys.pinned.none { it.id in keys })
     }
 
     @Test
-    fun displayZoomCropsEvenly() {
-        val keys = CoreKeys.of(EmulatorSettings(hwFixes = HwFixesSettings(displayZoom = 125, cropLeft = 9))).associateBy { it.id }
-        assertEquals("63", keys.getValue("EmuCore/GS/CropLeft").value)
-        assertEquals("63", keys.getValue("EmuCore/GS/CropRight").value)
-        assertEquals("44", keys.getValue("EmuCore/GS/CropTop").value)
+    fun speedAndOverclockAreComputed() {
+        val keys = CoreKeys.of(
+            EmulatorSettings(
+                frameLimit = FrameLimitSettings(frameLimitEnable = false),
+                cpu = CpuSettings(overclockPercent = 150),
+            ),
+        ).associateBy { it.id }
+        assertEquals("0.0", keys.getValue("Main/EmulationSpeed").value)
+        assertEquals("true", keys.getValue("CPU/OverclockEnable").value)
+        assertEquals("150", keys.getValue("CPU/OverclockNumerator").value)
+    }
+
+    @Test
+    fun gameBiosGoesToEveryRegion() {
+        val keys = CoreKeys.of(EmulatorSettings(system = SystemSettings(biosFilename = "scph7000.bin"))).associateBy { it.id }
+        for (key in listOf("BIOS/PathNTSCJ", "BIOS/PathNTSCU", "BIOS/PathPAL")) assertEquals("scph7000.bin", keys.getValue(key).value)
     }
 
     @Test
     fun copyPathsKeepsOnlyThosePaths() {
-        val boot = EmulatorSettings(output = OutputSettings(renderer = "opengl"))
-        val now = EmulatorSettings(output = OutputSettings(renderer = "vulkan", upscaleFloat = 2f))
+        val boot = EmulatorSettings(gpu = GpuSettings(renderer = "opengl"))
+        val now = EmulatorSettings(gpu = GpuSettings(renderer = "vulkan", resolutionScale = 2))
         val held = SettingsJson.copyPaths(now, boot, SettingsEffects.appliesOnNextBoot)
-        assertEquals("opengl", held.output.renderer)
-        assertEquals(2f, held.output.upscaleFloat)
+        assertEquals("opengl", held.gpu.renderer)
+        assertEquals(2, held.gpu.resolutionScale)
     }
 
     @Test
