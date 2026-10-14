@@ -81,6 +81,17 @@ std::vector<RewindPoint> GetRewindPoints();
 /// Goes back to the point at [index] in GetRewindPoints(). Blocks until done.
 bool LoadRewindPoint(u32 index);
 
+/// The titles of the discs in the loaded playlist (.m3u), and which one is in the drive. Empty
+/// when the loaded image is not a playlist or nothing runs. Blocks.
+std::vector<std::string> GetDiscPlaylist(u32* current);
+
+/// Puts disc [index] of the loaded playlist in the drive; the game sees the lid open and close.
+/// Blocks.
+bool SwitchDisc(u32 index);
+
+/// Puts the disc image at [path] in the drive. Blocks.
+bool InsertDisc(const std::string& path);
+
 /// Writes what is on screen to [path] as a PNG. Returns straight away; the file is written on a
 /// thread of its own.
 void SaveScreenshot(const std::string& path);

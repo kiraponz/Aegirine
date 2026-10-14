@@ -232,6 +232,61 @@ extern "C" JNIEXPORT jstring JNICALL NATIVE_CORE(getGameSerial)(JNIEnv* env, jcl
   return id.empty() ? nullptr : env->NewStringUTF(id.c_str());
 }
 
+/// The current index (as a string), then the titles of the discs in the loaded playlist; null
+/// when the loaded image is not a playlist.
+extern "C" JNIEXPORT jobjectArray JNICALL NATIVE_CORE(getDiscPlaylist)(JNIEnv* env, jclass)
+{
+  u32 current = 0;
+  const std::vector<std::string> titles = AndroidHost::GetDiscPlaylist(&current);
+  if (titles.empty())
+    return nullptr;
+
+  jclass string_class = env->FindClass("java/lang/String");
+  jobjectArray array = env->NewObjectArray(static_cast<jsize>(titles.size() + 1), string_class, nullptr);
+  jstring index = env->NewStringUTF(std::to_string(current).c_str());
+  env->SetObjectArrayElement(array, 0, index);
+  env->DeleteLocalRef(index);
+  for (size_t i = 0; i < titles.size(); i++)
+  {
+    jstring title = env->NewStringUTF(titles[i].c_str());
+    env->SetObjectArrayElement(array, static_cast<jsize>(i + 1), title);
+    env->DeleteLocalRef(title);
+  }
+  env->DeleteLocalRef(string_class);
+  return array;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL NATIVE_CORE(switchDisc)(JNIEnv*, jclass, jint index)
+{
+  return index >= 0 && AndroidHost::SwitchDisc(static_cast<u32>(index));
+}
+
+extern "C" JNIEXPORT jboolean JNICALL NATIVE_CORE(insertDisc)(JNIEnv* env, jclass, jstring path)
+{
+  return AndroidHost::InsertDisc(ToString(env, path));
+}
+
+/// The serials of the discs that belong to the game of [serial] in the database, in disc order;
+/// null when the database lists no disc set for it.
+extern "C" JNIEXPORT jobjectArray JNICALL NATIVE_CORE(getDiscSetSerials)(JNIEnv* env, jclass, jstring serial)
+{
+  const GameDatabase::Entry* entry = GameDatabase::GetEntryForSerial(ToString(env, serial));
+  if (!entry || entry->disc_set_serials.size() < 2)
+    return nullptr;
+
+  jclass string_class = env->FindClass("java/lang/String");
+  jobjectArray array =
+    env->NewObjectArray(static_cast<jsize>(entry->disc_set_serials.size()), string_class, nullptr);
+  for (size_t i = 0; i < entry->disc_set_serials.size(); i++)
+  {
+    jstring value = env->NewStringUTF(entry->disc_set_serials[i].c_str());
+    env->SetObjectArrayElement(array, static_cast<jsize>(i), value);
+    env->DeleteLocalRef(value);
+  }
+  env->DeleteLocalRef(string_class);
+  return array;
+}
+
 extern "C" JNIEXPORT jstring JNICALL NATIVE_CORE(getGameDbTitle)(JNIEnv* env, jclass, jstring serial)
 {
   const GameDatabase::Entry* entry = GameDatabase::GetEntryForSerial(ToString(env, serial));

@@ -1,5 +1,6 @@
 package com.kira3.ametrine.emulation
 
+import android.net.Uri
 import android.text.format.DateUtils
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -33,6 +34,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -58,6 +60,12 @@ import com.kira3.ametrine.emucore.settings.EmulatorSettings
 /** One save-state slot as the menu shows it. [savedAt] is null for an empty slot. */
 class SaveSlot(val slot: Int, val savedAt: Long?, val thumbnail: ImageBitmap?)
 
+/**
+ * A disc the player can put in the drive. [index] is its place in a playlist (.m3u) the core runs;
+ * otherwise [uri] is the image of another disc of the same game.
+ */
+class DiscChoice(val title: String, val current: Boolean, val index: Int? = null, val uri: Uri? = null)
+
 /** What the in-game menu can ask for. */
 interface InGameMenuActions {
     fun resume()
@@ -67,6 +75,9 @@ interface InGameMenuActions {
     fun screenshot()
     fun reset()
     fun exit()
+
+    /** Puts [disc] in the drive; the game is told the lid opened and closed. */
+    fun changeDisc(disc: DiscChoice)
 
     /** Saves where the game stands, then exits; the next start picks up from there. */
     fun exitAndResumeLater()
@@ -99,9 +110,11 @@ fun InGameMenu(
     selectedSlot: Int,
     busy: Boolean,
     hasGame: Boolean,
+    discs: List<DiscChoice>,
     actions: InGameMenuActions,
 ) {
     var confirm by remember { mutableStateOf<Confirm?>(null) }
+    var choosingDisc by remember { mutableStateOf(false) }
 
     Box(
         Modifier
@@ -155,6 +168,9 @@ fun InGameMenu(
                 if (hasGame && settings.rewind.enabled) {
                     MenuAction(stringResource(R.string.menu_rewind), !busy, actions::rewind)
                 }
+                if (discs.size > 1) {
+                    MenuAction(stringResource(R.string.menu_change_disc), !busy) { choosingDisc = true }
+                }
                 if (hasGame) {
                     MenuAction(stringResource(R.string.menu_cheats), !busy, actions::cheats)
                 }
@@ -205,6 +221,32 @@ fun InGameMenu(
                 FastForwardSpeed(settings.frameLimit.fastForwardSpeed, !busy, actions::setFastForwardSpeed)
             }
         }
+    }
+
+    if (choosingDisc) {
+        AlertDialog(
+            onDismissRequest = { choosingDisc = false },
+            title = { Text(stringResource(R.string.menu_change_disc)) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    discs.forEach { disc ->
+                        ListItem(
+                            headlineContent = { Text(disc.title, maxLines = 4) },
+                            leadingContent = { RadioButton(selected = disc.current, onClick = null) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.selectable(selected = disc.current, role = Role.RadioButton) {
+                                choosingDisc = false
+                                if (!disc.current) actions.changeDisc(disc)
+                            },
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { choosingDisc = false }) { Text(stringResource(R.string.menu_cancel)) }
+            },
+        )
     }
 
     confirm?.let { action ->

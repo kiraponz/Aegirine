@@ -461,6 +461,35 @@ bool AndroidHost::LoadRewindPoint(u32 index)
   return ok;
 }
 
+std::vector<std::string> AndroidHost::GetDiscPlaylist(u32* current)
+{
+  std::vector<std::string> titles;
+  Host::RunOnCPUThread(
+    [&titles, current]() {
+      if (!System::IsValid() || !System::HasMediaSubImages())
+        return;
+      for (u32 i = 0, count = System::GetMediaSubImageCount(); i < count; i++)
+        titles.push_back(System::GetMediaSubImageTitle(i));
+      *current = System::GetMediaSubImageIndex();
+    },
+    true);
+  return titles;
+}
+
+bool AndroidHost::SwitchDisc(u32 index)
+{
+  bool ok = false;
+  Host::RunOnCPUThread([index, &ok]() { ok = System::IsValid() && System::SwitchMediaSubImage(index); }, true);
+  return ok;
+}
+
+bool AndroidHost::InsertDisc(const std::string& path)
+{
+  bool ok = false;
+  Host::RunOnCPUThread([&path, &ok]() { ok = System::IsValid() && System::InsertMedia(path.c_str()); }, true);
+  return ok;
+}
+
 void AndroidHost::SaveScreenshot(const std::string& path)
 {
   Host::RunOnCPUThread([path]() {

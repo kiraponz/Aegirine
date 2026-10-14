@@ -400,6 +400,32 @@ class EmulatorCore(context: Context) {
     /** Goes back to the rewind point [n] (see [rewindPoints]). The newer points are dropped. */
     fun rewindTo(n: Int): Boolean = NativeCore.loadRewindPoint(n - 1)
 
+    // ---- Discs ----
+
+    /** The discs of a playlist (.m3u) game: their [titles] and the [current] one's index. */
+    class DiscPlaylist(val titles: List<String>, val current: Int)
+
+    /** The running game's playlist, or null when it didn't start from a .m3u. Blocks while the core answers. */
+    fun discPlaylist(): DiscPlaylist? {
+        val info = NativeCore.getDiscPlaylist() ?: return null
+        return DiscPlaylist(titles = info.drop(1), current = info[0].toIntOrNull() ?: 0)
+    }
+
+    /** Puts disc [index] of [discPlaylist] in the drive. */
+    fun switchDisc(index: Int): Boolean = NativeCore.switchDisc(index)
+
+    /** Puts the disc image at [uri] in the drive of the running game. Blocking I/O. */
+    fun insertDisc(uri: Uri): Boolean {
+        val path = files.pathFor(uri) ?: return false
+        return NativeCore.insertDisc(path)
+    }
+
+    /**
+     * The serials of the discs that make up [serial]'s game, in disc order; empty for a game on one
+     * disc or one the GameDB doesn't know. Needs [initialize].
+     */
+    fun discSetSerials(serial: String): List<String> = NativeCore.getDiscSetSerials(serial)?.toList().orEmpty()
+
     // ---- Screenshots ----
 
     /**

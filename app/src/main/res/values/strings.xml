@@ -67,6 +67,10 @@
     <string name="menu_screenshot">Take screenshot</string>
     <string name="menu_reset">Reset</string>
     <string name="menu_exit">Exit game</string>
+    <string name="menu_change_disc">Change disc</string>
+    <string name="menu_disc_number">Disc %1$d</string>
+    <string name="emulation_disc_changed">Inserted %1$s</string>
+    <string name="emulation_disc_change_failed">Could not change the disc</string>
     <string name="menu_rewind">Rewind</string>
     <string name="menu_exit_suspend">Exit and resume later</string>
     <string name="menu_show_fps">Show FPS</string>

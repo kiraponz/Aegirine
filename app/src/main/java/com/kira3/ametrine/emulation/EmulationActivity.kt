@@ -159,6 +159,12 @@ class EmulationActivity : ComponentActivity() {
     private var saveSlots by mutableStateOf<List<SaveSlot>?>(null)
     private var selectedSlot by mutableStateOf(EmulatorCore.SAVE_STATE_SLOTS.first)
 
+    /** The discs the menu offers: a playlist's, or the other discs of this game in the library. Empty for a one-disc game. */
+    private var discChoices by mutableStateOf<List<DiscChoice>>(emptyList())
+
+    /** The image in the drive when the game didn't start from a playlist. */
+    private var currentDiscUri: Uri? = null
+
     /** A save or load is running. */
     private var stateBusy by mutableStateOf(false)
 
@@ -383,7 +389,7 @@ class EmulationActivity : ComponentActivity() {
                         )
                     }
                     if (menuOpen && current != null) {
-                        InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, menuActions)
+                        InGameMenu(current, saveSlots, selectedSlot, stateBusy, serial != null, discChoices, menuActions)
                     }
                 }
             }
@@ -463,6 +469,7 @@ class EmulationActivity : ComponentActivity() {
         // Every game the core runs gets this game's cheats, so a game without a serial gets none.
         core.setCheats(serial?.let { container.cheatRepository.load(it) }.orEmpty())
 
+        currentDiscUri = gameUri
         Log.i(TAG, "Booting $gameUri (serial $serial)" + if (suspended != null) " from ${suspended.name}" else "")
         emulationThread = thread(name = "Emulation") {
             val error = core.runVm(gameUri.toString(), serial)
@@ -621,7 +628,9 @@ class EmulationActivity : ComponentActivity() {
         }
         menuOpen = true
         saveSlots = null
+        discChoices = emptyList()
         lifecycleScope.launch { saveSlots = readSaveSlots() }
+        lifecycleScope.launch { discChoices = readDiscs() }
     }
 
     /** Opens the rewind menu over a paused game, from the button over the game. */
@@ -1064,6 +1073,18 @@ class EmulationActivity : ComponentActivity() {
         }
     }
 
+    private suspend fun readDiscs(): List<DiscChoice> = withContext(Dispatchers.IO) {
+        core.discPlaylist()?.let { playlist ->
+            return@withContext playlist.titles.mapIndexed { i, title ->
+                DiscChoice(title.ifBlank { getString(R.string.menu_disc_number, i + 1) }, i == playlist.current, index = i)
+            }
+        }
+        val serial = serial ?: return@withContext emptyList()
+        val discs = runCatching { container.libraryRepository.discSet(serial) }.getOrDefault(emptyList())
+        if (discs.size < 2) return@withContext emptyList()
+        discs.map { DiscChoice(it.title, it.uri == currentDiscUri, uri = it.uri) }
+    }
+
     private val menuActions = object : InGameMenuActions {
         override fun resume() = closeMenu()
 
@@ -1130,6 +1151,27 @@ class EmulationActivity : ComponentActivity() {
             pausedByMenu = false
             restartRequested = true
             core.shutdown()
+        }
+
+        override fun changeDisc(disc: DiscChoice) {
+            stateBusy = true
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    when {
+                        disc.index != null -> core.switchDisc(disc.index)
+                        disc.uri != null -> core.insertDisc(disc.uri)
+                        else -> false
+                    }
+                }
+                stateBusy = false
+                if (ok) {
+                    disc.uri?.let { currentDiscUri = it }
+                    showMessage(getString(R.string.emulation_disc_changed, disc.title))
+                    closeMenu()
+                } else {
+                    showMessage(getString(R.string.emulation_disc_change_failed))
+                }
+            }
         }
 
         override fun exit() {

@@ -40,8 +40,12 @@ data class Game(
     /** Whether "Exit and resume later" left a state for the next start. */
     val resumable: Boolean = false,
 ) {
-    /** The user's title, else the GameDB name, else the file name without its extension. */
-    val title: String get() = record.customTitle ?: dbTitle ?: fileName.substringBeforeLast('.')
+    /**
+     * The user's title, else the GameDB name, else the file name without its extension. A playlist
+     * goes by its file name: the GameDB name is its first disc's.
+     */
+    val title: String
+        get() = record.customTitle ?: dbTitle?.takeIf { format != "M3U" } ?: fileName.substringBeforeLast('.')
 
     /** Key in [GameRecordRepository]. */
     val recordKey: String get() = GameRecordRepository.keyOf(serial, uri.toString())
@@ -190,6 +194,17 @@ class LibraryRepository(
         return serial
     }
 
+    /**
+     * The library's discs that make up [serial]'s game, in disc order; empty for a game the GameDB
+     * lists on one disc. Needs the core initialized.
+     */
+    suspend fun discSet(serial: String): List<Game> = withContext(Dispatchers.IO) {
+        val serials = core.discSetSerials(serial)
+        if (serials.isEmpty()) return@withContext emptyList()
+        val bySerial = dao.getAll().filter { it.serial in serials }.associateBy { it.serial }
+        serials.mapNotNull { bySerial[it]?.toGame() }
+    }
+
     private val appContext = context.applicationContext
 
     /**
@@ -237,10 +252,26 @@ class LibraryRepository(
             // A cue sheet's tracks are not games of their own. Their names need not match the
             // sheet's, so a folder with a cue sheet lists none of its raw images.
             if (found.any { extensionOf(it.fileName) == "cue" }) found.removeAll { extensionOf(it.fileName) in TRACK_EXTENSIONS }
+            // A playlist (.m3u) starts its discs itself, so they are not games of their own either.
+            val members = found.filter { extensionOf(it.fileName) == "m3u" }.flatMapTo(HashSet()) { playlistMembers(it) }
+            if (members.isNotEmpty()) {
+                found.removeAll { extensionOf(it.fileName) != "m3u" && it.fileName.lowercase() in members }
+            }
             games += found
         }
         return games
     }
+
+    /** Lower-case file names a playlist lists. Names only: the discs are matched within the playlist's folder. */
+    private fun playlistMembers(playlist: GameEntity): Set<String> = runCatching {
+        contentResolver.openInputStream(Uri.parse(playlist.uri))?.bufferedReader()?.use { reader ->
+            reader.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+                .map { it.substringAfterLast('/').substringAfterLast('\\').lowercase() }
+                .toSet()
+        }
+    }.getOrNull().orEmpty()
 
     private fun GameEntity.toGame() = Game(
         uri = Uri.parse(uri),

@@ -149,6 +149,21 @@ internal object NativeCore {
     /** The disc's serial (e.g. "SLUS-00067"), or null if the core cannot read one from [path]. */
     @JvmStatic external fun getGameSerial(path: String): String?
 
+    /**
+     * The index of the disc in the drive (as a string), then the titles of the discs of the loaded
+     * playlist (.m3u); null when the loaded image is not a playlist. Blocks.
+     */
+    @JvmStatic external fun getDiscPlaylist(): Array<String>?
+
+    /** Puts disc [index] of the loaded playlist in the drive. Blocks. */
+    @JvmStatic external fun switchDisc(index: Int): Boolean
+
+    /** Puts the disc image at [path] in the drive. Blocks. */
+    @JvmStatic external fun insertDisc(path: String): Boolean
+
+    /** The serials of the discs of [serial]'s game in the GameDB, in disc order; null when it lists no set. */
+    @JvmStatic external fun getDiscSetSerials(serial: String): Array<String>?
+
     /** The GameDB's title for [serial], or null. */
     @JvmStatic external fun getGameDbTitle(serial: String): String?
 
